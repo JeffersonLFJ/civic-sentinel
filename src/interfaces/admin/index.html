@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela Cívico - Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Painel de Controle</span>
+            </div>
+            <nav>
+                <a href="index.html" class="active">📄 Documentos</a>
+                <a href="#" onclick="openAuditoriaModal()">📊 Auditoria & Citações</a>
+                <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
+                <a href="inspector.html">🔍 Inspetor de Dados</a>
+                <a href="prompt.html">🧠 System Prompt</a>
+                <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h1>Gestão de Documentos</h1>
+                <div class="actions">
+                    <button id="refreshBtn" class="btn secondary">🔄 Atualizar</button>
+                    <button id="scanLocalBtn" class="btn secondary" style="background: #0f172a; color: #fff; border: 1px solid #334155;">📁 Scan Pasta Local</button>
+                    <button id="uploadBtn" class="btn primary">+ Upload Manual</button>
+                </div>
+            </header>
+
+            <div class="stats-cards">
+                <div class="card">
+                    <h3>Total Indexado</h3>
+                    <p id="totalDocs">...</p>
+                </div>
+                <div class="card">
+                    <h3>Última Ingestão</h3>
+                    <p>Hoje</p>
+                </div>
+                <div class="card warning">
+                    <h3>Alertas de Risco</h3>
+                    <p>0 (Demo)</p>
+                </div>
+            </div>
+
+            <section class="documents-list">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Fonte</th>
+                            <th>Data Publicação</th>
+                            <th>Status (OCR)</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="docsTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
+
+        <!-- Upload Modal -->
+        <div id="uploadModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Upload de Documento</h3>
+                <div class="file-drop-area">
+                    <span class="file-msg">Arraste ou clique aqui</span>
+                    <input class="file-input" type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.txt,.html"
+                        required>
+                </div>
+                <div class="modal-actions">
+                    <button id="cancelUpload" class="btn secondary">Cancelar</button>
+                    <button id="confirmUpload" class="btn primary">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content" style="text-align: center;">
+            <div class="spinner"></div>
+            <h3 id="loadingText" style="margin-top: 1rem;">Processando...</h3>
+            <p id="loadingSubtext" style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Isso pode levar alguns
+                segundos.</p>
+
+            <!-- Live Logs View -->
+            <div id="uploadLogViewer"
+                style="margin-top: 20px; width: 100%; height: 150px; background: #1e293b; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8rem; color: #94a3b8; overflow-y: auto; text-align: left;">
+                <div style="margin-bottom: 5px; border-bottom: 1px solid #334155; padding-bottom: 5px;">📜 Logs em Tempo
+                    Real:</div>
+                <div id="miniLogContent">Aguardando início...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir este documento? Esta ação não pode ser desfeita.</p>
+            <div class="modal-actions">
+                <button id="cancelDelete" class="btn secondary">Cancelar</button>
+                <button id="confirmDelete" class="btn danger">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="auditoriaModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>Auditoria de Citações e Inteligência</h3>
+                <button class="btn secondary" onclick="closeAuditoria()">Fechar</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                            <th style="padding: 12px;">Data/Hora</th>
+                            <th style="padding: 12px;">Ação</th>
+                            <th style="padding: 12px;">Citações / Detalhes</th>
+                            <th style="padding: 12px;">Confiança</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=2"></script>
+</body>
+
+</html>

@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: sentinela_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - .:/app
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - ANONYMIZATION_SALT=${ANONYMIZATION_SALT:-dev_secret_salt}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    command: uvicorn src.interfaces.api.main:app --host 0.0.0.0 --port 8000 --reload
+  # Optional: ChromaDB service if we wanted it isolated, 
+  # but for now we are using in-process persistency mapped to volume ./data/chromadb

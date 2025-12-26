@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela - Inspetor de Dados</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .inspector-container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 100px);
+        }
+
+        .doc-list {
+            width: 300px;
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .chunk-viewer {
+            flex: 1;
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .doc-item {
+            padding: 10px;
+            border-bottom: 1px solid #334155;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .doc-item:hover {
+            background: #334155;
+        }
+
+        .doc-item.active {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .chunk-card {
+            background: #1e293b;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #6366f1;
+        }
+
+        .chunk-meta {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .chunk-text {
+            font-family: monospace;
+            white-space: pre-wrap;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Painel de Controle</span>
+            </div>
+            <nav>
+                <a href="index.html">📄 Documentos</a>
+                <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
+                <a href="inspector.html" class="active">🔍 Inspetor de Dados</a>
+                <a href="prompt.html">🧠 System Prompt</a>
+                <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h1>Inspetor de Indexação (ChromaDB)</h1>
+                <p style="color: #94a3b8;">Visualize exatamente como o texto foi extraído e armazenado.</p>
+            </header>
+
+            <div class="inspector-container">
+                <div class="doc-list" id="docList">
+                    <p>Carregando documentos...</p>
+                </div>
+                <div class="chunk-viewer" id="chunkViewer">
+                    <div style="text-align: center; color: #94a3b8; margin-top: 50px;">
+                        Selecione um documento à esquerda para ver seus "Chunks" (pedaços de texto).
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logsModal" class="modal hidden">
+        <div class="modal-content" style="width: 80%; max-width: 900px; height: 80vh;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <h3>Logs do Sistema</h3>
+                <button class="btn secondary" onclick="closeLogs()">Fechar</button>
+            </div>
+            <div id="logsContainer"
+                style="height: 90%; background: #0f172a; padding: 1rem; overflow-y: auto; font-family: monospace; color: #a5b4fc;">
+            </div>
+        </div>
+    </div>
+
+    <script src="inspector.js"></script>
+    <script>
+        // Shared Log Logic (Compact)
+        const logsModal = document.getElementById('logsModal');
+        const logsContainer = document.getElementById('logsContainer');
+        function openLogs() {
+            logsModal.classList.remove('hidden');
+            logsModal.style.display = 'flex';
+            fetch('/api/admin/logs?lines=200').then(r => r.json()).then(d => {
+                logsContainer.innerHTML = d.logs ? d.logs.join('<br>') : 'Sem logs.';
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            });
+        }
+        function closeLogs() {
+            logsModal.classList.add('hidden');
+            logsModal.style.display = 'none';
+        }
+    </script>
+</body>
+
+</html>

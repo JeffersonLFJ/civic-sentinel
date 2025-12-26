@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Sentinela - Editor de Prompt</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .editor-container {
+            height: calc(100vh - 150px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 1rem;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+        }
+
+        .actions-bar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+
+        .success {
+            color: #4ade80;
+            margin-right: auto;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Painel de Controle</span>
+            </div>
+            <nav>
+                <a href="index.html">📄 Documentos</a>
+                <a href="index.html#logs">📜 Logs do Sistema</a>
+                <a href="inspector.html">🔍 Inspetor de Dados</a>
+                <a href="prompt.html" class="active">🧠 System Prompt</a>
+                <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
+            </nav>
+        </aside>
+
+        <!-- Main -->
+        <main class="main-content">
+            <div class="actions-bar">
+                <span id="statusMsg" class="success">Salvo com sucesso!</span>
+                <button onclick="loadPrompt()" class="btn secondary">Descartar / Recarregar</button>
+                <button onclick="savePrompt()" class="btn primary">Salvar Prompt</button>
+            </div>
+
+            <div class="editor-container">
+                <textarea id="promptEditor" spellcheck="false"></textarea>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_URL = '/api/admin/prompt';
+        const editor = document.getElementById('promptEditor');
+        const statusMsg = document.getElementById('statusMsg');
+
+        async function loadPrompt() {
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                editor.value = data.content;
+            } catch (e) {
+                alert("Erro ao carregar prompt: " + e);
+            }
+        }
+
+        async function savePrompt() {
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: editor.value })
+                });
+                if (res.ok) {
+                    showSuccess();
+                } else {
+                    alert("Erro ao salvar.");
+                }
+            } catch (e) {
+                alert("Erro ao salvar: " + e);
+            }
+        }
+
+        function showSuccess() {
+            statusMsg.style.opacity = 1;
+            setTimeout(() => statusMsg.style.opacity = 0, 2000);
+        }
+
+        // Init
+        loadPrompt();
+    </script>
+</body>
+
+</html>

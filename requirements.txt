@@ -1,0 +1,19 @@
+fastapi>=0.104.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+uvicorn>=0.23.0
+httpx>=0.25.0
+chromadb>=0.4.18
+aiosqlite>=0.19.0
+python-multipart>=0.0.6
+uvloop>=0.19.0
+# OCR tools (some might need system libs, handled via brew if needed)
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+PyPDF2>=3.0.0
+# Monitoring/Scheduling
+apscheduler>=3.10.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0

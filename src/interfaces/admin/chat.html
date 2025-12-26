@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Sentinela - Chat Debug</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+        }
+
+        .chat-box {
+            flex: 1;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 1rem;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 1rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 1rem;
+        }
+
+        /* Messages */
+        .msg {
+            padding: 1rem;
+            border-radius: 8px;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .user {
+            align-self: flex-end;
+            background: #3b82f6;
+            color: white;
+        }
+
+        .bot {
+            align-self: flex-start;
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .meta {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 5px;
+            border-top: 1px solid #475569;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container" style="justify-content: center; padding-top: 2rem;">
+        <div class="chat-container">
+            <header>
+                <h2>💬 Chat de Debug</h2>
+                <button onclick="window.close()" class="btn secondary">Fechar</button>
+            </header>
+
+            <div class="chat-box" id="messages">
+                <div class="msg bot">
+                    Olá! Sou o Sentinela (Modo Debug).<br>
+                    Posso acessar todos os documentos indexados. Pergunte algo.
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="userInput" placeholder="Digite sua pergunta..." onkeypress="handleKey(event)">
+                <button onclick="sendMessage()" class="btn primary">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/chat/';
+        const msgs = document.getElementById('messages');
+        const input = document.getElementById('userInput');
+        const userId = 'admin_debug_' + Math.random().toString(36).substr(2, 9);
+
+        function handleKey(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            // User Msg
+            addMsg(text, 'user');
+            input.value = '';
+            input.disabled = true;
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: text,
+                        user_id: userId
+                    })
+                });
+
+                const data = await res.json();
+
+                // Bot Msg + Citations
+                let content = data.response;
+
+                // Append citations if any
+                if (data.metadata?.citations?.length > 0) {
+                    content += "<div class='meta'><strong>Fontes:</strong><ul>";
+                    data.metadata.citations.forEach(c => {
+                        content += `<li>${c.filename} (${c.publication_date || 's/d'})</li>`;
+                    });
+                    content += "</ul></div>";
+                }
+
+                addMsg(content, 'bot', true);
+            } catch (e) {
+                addMsg(`Erro: ${e.message}`, 'bot');
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        function addMsg(html, type, isHtml = false) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            if (isHtml) div.innerHTML = html;
+            else div.textContent = html;
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+    </script>
+</body>
+
+</html>
