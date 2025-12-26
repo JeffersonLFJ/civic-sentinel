@@ -1,6 +1,6 @@
-# Sentinela Cívico 🛡️
+# Civic Sentinel 🛡️ (Sentinela)
 
-Sentinela Cívico é uma plataforma de monitoramento e auditoria de diários oficiais e documentos públicos, focada em transparência e justiça epistêmica algorítmica. O sistema utiliza técnicas avançadas de RAG (Retrieval-Augmented Generation), OCR e inteligência artificial local para processar e analisar dados governamentais.
+Civic Sentinel é uma plataforma de monitoramento e auditoria de diários oficiais e documentos públicos, focada em transparência e justiça epistêmica algorítmica. O sistema utiliza técnicas avançadas de RAG (Retrieval-Augmented Generation), OCR e inteligência artificial local para processar e analisar dados governamentais.
 
 ## 🚀 Funcionalidades
 
@@ -32,8 +32,8 @@ O projeto é dividido em camadas modulares:
 
 1. **Clone o repositório**:
    ```bash
-   git clone https://github.com/JeffersonLFJ/Sentinela.git
-   cd Sentinela
+   git clone https://github.com/JeffersonLFJ/civic-sentinel.git
+   cd civic-sentinel
    ```
 
 2. **Crie e ative o ambiente virtual**:
@@ -67,4 +67,7 @@ docker-compose up --build
 Este projeto está licenciado sob a **Mozilla Public License 2.0 (MPL 2.0)**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ---
-Desenvolvido com foco em **Transparência e Justiça Social**.
+Desenvolvido por **Jefferson Lopes** via **Vibe Coding** 🎧
+Utilizando a CLI **Google AntiGravity** e modelos **Gemini 3 High & Flash**.
+
+Foco em **Transparência e Justiça Social**.
