@@ -224,21 +224,9 @@ class DatabaseManager:
         elif "lei" in filename or "decreto" in filename:
              doc_type = "legislation"
             
-        # 1. Prepare Context Header
-        # This header is prepended to every chunk by the splitter (if supported) 
-        # OR we prepend it here if we want absolute control. The splitter now supports `context_prefix`.
-        
-        # Build a descriptive context string
-        context_header = f"[DOCUMENTO: {filename}]"
-        if metadata.get("source"):
-             context_header += f" [TIPO: {metadata.get('source')}]"
-        if metadata.get("publication_date"):
-             context_header += f" [DATA: {metadata.get('publication_date')}]"
-        context_header += " \n "
-
-        # 2. Split with Context (Injected into every chunk)
+        # 2. Split (Without Header, as requested)
         logger.info(f"🔍 Fragmentando texto em blocos para indexação...")
-        chunks = text_splitter.split(text, doc_type=doc_type, context_prefix=context_header)
+        chunks = text_splitter.split(text, doc_type=doc_type, context_prefix="")
         
         if not chunks:
             logger.warning("⚠️ Nenhum chunk gerado após fragmentação.")
