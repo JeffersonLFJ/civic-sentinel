@@ -92,11 +92,16 @@ Para rodar via Docker Compose:
 docker-compose up --build
 ```
 
-## ⚖️ Compromissos Bioéticos (Privacy by Design)
+## 🦅 Metodologia "Vibe Coding" & IA
+Este projeto foi desenvolvido seguindo o paradigma de **Vibe Coding**:
+- **Humano**: Jefferson Lopes (Direção Criativa, Ética e Regras de Negócio).
+- **Co-Piloto**: Google Gemini 3 (High & Flash) via **Google AntiGravity CLI**.
+- **Processo**: Desenvolvimento acelerado focado na *intenção* do código, onde a IA atua como um par programador de alta frequência, implementando a arquitetura sob supervisão humana rigorosa.
 
+## ⚖️ Filosofia: Privacidade e Justiça Epistêmica
 O Sentinela implementa restrições técnicas invioláveis baseadas na tese de Justiça Epistêmica:
-1.  **Anonimato Radical**: Nenhum dado pessoal cru é persistido; identificadores são convertidos via SHA256 antes do processamento.
-2.  **Soberania Tecnológica**: Dependência zero de Big Techs. Todo o processamento (OCR e LLM) ocorre *on-premise*.
+1.  **Anonimato Radical (Privacy by Design)**: Nenhum dado pessoal cru é persistido; identificadores são convertidos via SHA256 antes do processamento.
+2.  **Soberania Tecnológica**: Dependência zero de Big Techs para inferência. Todo o processamento (OCR e LLM) ocorre **on-premise** (localmente), garantindo que dados sensíveis do município nunca deixem a infraestrutura.
 3.  **Auditabilidade**: Cada inferência da IA carrega metadados de confiança e versão do prompt utilizado.
 
 ## 📄 Licença
@@ -104,7 +109,4 @@ O Sentinela implementa restrições técnicas invioláveis baseadas na tese de J
 Este projeto está licenciado sob a **Mozilla Public License 2.0 (MPL 2.0)**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ---
-Desenvolvido por **Jefferson Lopes** via **Vibe Coding** 🎧
-Utilizando a CLI **Google AntiGravity** e modelos **Gemini 3 High & Flash**.
-
-Foco em **Transparência e Justiça Social**.
+**Sentinela Cívico** — Transparência através da Tecnologia Soberana.
