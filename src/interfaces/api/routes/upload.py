@@ -27,25 +27,33 @@ async def upload_document(
     
     try:
         # Save file tentatively
+        import logging
+        logger = logging.getLogger("src.interfaces.api.routes.upload")
+        
+        logger.info(f"💾 Salvando arquivo temporário: {file.filename}")
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
         # Process with OCR
+        logger.info(f"🔍 Iniciando extração de texto (OCR/PDF) para {file.filename}...")
         ocr_result = await ocr_engine.process_document(str(file_location))
+        logger.info(f"✅ Texto extraído com sucesso ({ocr_result['ocr_method']}).")
         
         # Persistence Logic
         storage_path = None
         if source == "admin":
             final_path = processed_dir / file.filename
+            logger.info(f"📂 Movendo arquivo para diretório processado: {final_path}")
             shutil.move(str(file_location), str(final_path))
             storage_path = str(final_path)
         else:
             # For user, we just delete the file after processing
-            # We already processed it in `file_location`
             if file_location.exists():
+                logger.info(f"🗑️ Removendo arquivo temporário (origem: user)")
                 os.remove(file_location)
                 
         # Save to DB (SQLite)
+        logger.info("🗄️ Registrando metadados no SQLite...")
         from src.core.database import db_manager
         
         doc_data = {
@@ -57,13 +65,16 @@ async def upload_document(
         }
         
         doc_id = await db_manager.save_document_record(doc_data)
+        logger.info(f"📝 Registro salvo com ID: {doc_id}")
         
         # Save to Vector DB (Chroma)
+        logger.info("🧠 Gerando fragmentos e indexando no banco vetorial (ChromaDB)...")
         await db_manager.index_document_text(
             doc_id=doc_id, 
             text=doc_data["text_content"],
             metadata={"source": source, "filename": file.filename}
         )
+        logger.info("🎉 Indexação concluída com sucesso!")
         
         return {
             "status": "processed",

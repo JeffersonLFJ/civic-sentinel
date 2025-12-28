@@ -88,31 +88,87 @@ const fileInput = document.getElementById('fileInput');
 // Upload Logic
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
-const loadingSubtext = document.getElementById('loadingSubtext'); // Keep existing subtext element
-const miniLogContent = document.getElementById('miniLogContent'); // NEW
-let logInterval = null; // NEW
+const loadingSubtext = document.getElementById('loadingSubtext');
+const miniLogContent = document.getElementById('miniLogContent');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const closeLoadingBtn = document.getElementById('closeLoadingBtn');
+let logInterval = null;
 
 function startLogPolling() {
     miniLogContent.innerHTML = 'Conectando aos logs...';
+    progressBar.style.width = '5%';
+    progressText.innerText = '5%';
+
     logInterval = setInterval(async () => {
         try {
             const res = await fetch('/api/admin/logs?lines=50');
             const data = await res.json();
             if (data.logs) {
-                // Filter logs to show relevant info or just last 50 lines
                 miniLogContent.innerHTML = data.logs.join('<br>');
                 miniLogContent.scrollTop = miniLogContent.scrollHeight;
+
+                // Simple parser for progress based on keywords added in upload.py
+                const logsJoined = data.logs.join(' ');
+                if (logsJoined.includes('🎉 Indexação concluída')) {
+                    updateProgress(100);
+                    showCloseButton();
+                } else if (logsJoined.includes('🧠 Gerando fragmentos')) {
+                    updateProgress(80);
+                } else if (logsJoined.includes('📝 Registro salvo')) {
+                    updateProgress(60);
+                } else if (logsJoined.includes('🗄️ Registrando metadados')) {
+                    updateProgress(50);
+                } else if (logsJoined.includes('✅ Texto extraído')) {
+                    updateProgress(40);
+                } else if (logsJoined.includes('🔍 Iniciando extração')) {
+                    updateProgress(20);
+                } else if (logsJoined.includes('💾 Salvando arquivo')) {
+                    updateProgress(10);
+                }
             }
         } catch (e) {
             console.error("Log poll failed", e);
         }
-    }, 1500); // Poll every 1.5s
+    }, 1500);
+}
+
+function updateProgress(val) {
+    progressBar.style.width = `${val}%`;
+    progressText.innerText = `${val}%`;
+}
+
+function showCloseButton() {
+    stopLogPolling();
+    closeLoadingBtn.style.display = 'block';
+    loadingSubtext.innerText = "Processamento concluído com sucesso!";
+}
+
+function showLoading(title, sub) {
+    loadingText.textContent = title;
+    loadingSubtext.textContent = sub;
+    loadingOverlay.classList.remove('hidden');
+    loadingOverlay.style.display = 'flex';
+    // Reset UI
+    progressBar.style.width = '0%';
+    progressText.innerText = '0%';
+    closeLoadingBtn.style.display = 'none';
+}
+
+function hideLoading() {
+    loadingOverlay.classList.add('hidden');
+    loadingOverlay.style.display = 'none';
 }
 
 function stopLogPolling() {
     if (logInterval) clearInterval(logInterval);
     logInterval = null;
 }
+
+closeLoadingBtn.addEventListener('click', () => {
+    hideLoading();
+    fetchDocuments();
+});
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
@@ -139,8 +195,10 @@ scanLocalBtn.addEventListener('click', async () => {
     } catch (e) {
         alert("Erro no scan: " + e.message);
     } finally {
-        hideLoading();
-        stopLogPolling();
+        if (!closeLoadingBtn.style.display || closeLoadingBtn.style.display === 'none') {
+            hideLoading();
+            stopLogPolling();
+        }
     }
 });
 
@@ -150,13 +208,11 @@ uploadBtn.addEventListener('click', () => {
     document.getElementById('uploadModal').style.display = 'flex';
 });
 
-// Replaced existing cancelUpload listener and closeModal function
 document.getElementById('cancelUpload').addEventListener('click', () => {
     document.getElementById('uploadModal').classList.add('hidden');
     document.getElementById('uploadModal').style.display = 'none';
 });
 
-// Replaced existing confirmUpload listener
 document.getElementById('confirmUpload').addEventListener('click', async () => {
     const file = fileInput.files[0];
     if (!file) return alert("Selecione um arquivo!");
@@ -165,10 +221,7 @@ document.getElementById('confirmUpload').addEventListener('click', async () => {
     document.getElementById('uploadModal').classList.add('hidden');
     document.getElementById('uploadModal').style.display = 'none';
 
-    loadingOverlay.classList.remove('hidden');
-    loadingOverlay.style.display = 'flex'; // Fix flex display
-
-    // Start Polling Logs
+    showLoading("Enviando arquivo...", "O Sentinela está recebendo seu documento.");
     startLogPolling();
 
     const formData = new FormData();
@@ -176,19 +229,14 @@ document.getElementById('confirmUpload').addEventListener('click', async () => {
     formData.append("source", "admin");
 
     try {
-        loadingText.innerText = "Enviando arquivo...";
-        loadingSubtext.innerText = "O Sentinela está recebendo seu documento."; // Keep subtext updated
-
-        // Simulating stages manually since fetch is one-shot, 
-        // but backend logs will now appear in the mini-viewer!
-
-        const response = await fetch(UPLOAD_URL, {
+        await fetch(UPLOAD_URL, {
             method: 'POST',
             body: formData
         });
-        fetchDocuments();
+        // fetchDocuments() is called by the manual close button now
     } catch (e) {
         hideLoading();
+        stopLogPolling();
         alert(e.message);
     }
 });
@@ -196,21 +244,6 @@ document.getElementById('confirmUpload').addEventListener('click', async () => {
 function closeModal() {
     uploadModal.classList.add('hidden');
     uploadModal.style.display = 'none';
-}
-
-// Overlay Helpers
-// Variables loadingOverlay, loadingText, loadingSubtext are already declared at the top.
-
-function showLoading(title, sub) {
-    loadingText.textContent = title;
-    loadingSubtext.textContent = sub;
-    loadingOverlay.classList.remove('hidden');
-    loadingOverlay.style.display = 'flex';
-}
-
-function hideLoading() {
-    loadingOverlay.classList.add('hidden');
-    loadingOverlay.style.display = 'none';
 }
 
 // Logic
