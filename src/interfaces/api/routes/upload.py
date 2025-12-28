@@ -81,11 +81,12 @@ async def process_document_task(file_location: str, filename: str, source: str, 
                 text = re.sub(r'(?<=[a-zA-Z0-9,])\n(?=[a-zà-ù])', ' ', text)
                 ocr_result["extracted_text"] = text
 
-                # B) Detecção de Lei em PDF
-                law_patterns = len(re.findall(r'(?:^|\n)\s*Art\.\s*\d+', text, re.IGNORECASE))
-                if law_patterns > 5:
-                    logger.info("⚖️ Detectada estrutura de LEI dentro do PDF (Hybrid Chunking).")
-                    doc_type = "lei" # Força o splitter de lei no indexador
+                # B) Detecção de Lei em PDF - REMOVIDO PARA RESPEITAR SELEÇÃO DO USUÁRIO
+                # A inteligência de chunking recursivo já lidará bem com o texto.
+                # law_patterns = len(re.findall(r'(?:^|\n)\s*Art\.\s*\d+', text, re.IGNORECASE))
+                # if law_patterns > 5:
+                #    logger.info("⚖️ Detectada estrutura de LEI dentro do PDF (Hybrid Chunking).")
+                #    doc_type = "lei" 
 
         
         # Persistence Logic

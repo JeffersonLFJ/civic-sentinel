@@ -438,10 +438,10 @@ function renderTable(docs) {
 
         // Mapeamento amigável de tipos
         const typeMap = {
-            'lei': '📜 Lei (HTML)',
+            'lei': '📜 Lei / Legislação',
             'denuncia': '📄 Documento (OCR)',
             'diario': '📰 Diário Oficial',
-            'tabela': '📊 Planilha/Tabela'
+            'tabela': '📊 Planilha / Tabela'
         };
         const displayType = typeMap[doc.doc_type] || doc.doc_type || '-';
 
