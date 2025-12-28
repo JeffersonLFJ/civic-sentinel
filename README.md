@@ -4,12 +4,42 @@ Civic Sentinel é uma plataforma de monitoramento e auditoria de diários oficia
 
 ## 🚀 Funcionalidades
 
-- **Ingestão Inteligente**: Monitoramento automático de diários oficiais (ex: Nova Iguaçu via Querido Diário) e pastas locais.
-- **OCR Robusto**: Processamento de documentos digitalizados usando Tesseract com validação de confiança.
-- **Cérebro RAG**: Indexação semântica em ChromaDB e busca vetorial para contextos precisos.
-- **Privacidade**: Processamento local utilizando Ollama (Gemma 3:27B) para garantir a segurança dos dados.
-- **Auditoria**: Trilha completa de ações com scores de confiança.
-- **Interface Admin**: Dashboard para visualização de logs, documentos citados e métricas.
+### 🧠 Inteligência e Ingestão
+- **Ingestão Híbrida Inteligente**: 
+  - **Scan Local**: Monitoramento de pastas locais (`data/ingest`) com seleção manual de tipo de documento.
+  - **PDFs "Curados"**: Algoritmo de *text healing* que corrige quebras de linha de OCR e fragmentação recursiva para leitura fluida.
+  - **Diário Oficial**: Integração com API do Querido Diário para Niterói e Nova Iguaçu.
+- **RAG Avançado**: Indexação vetorial (ChromaDB) com busca semântica de alta precisão.
+- **OCR Robusto**: Falha graciosamente do Tesseract para estratégias visuais quando necessário.
+
+### 🛡️ Auditoria e Controle
+- **Painel Administrativo (`/admin`)**:
+  - **Editor de System Prompt**: Interface visual para ajustar a personalidade e regras éticas da IA sem tocar em código (`⚙️ Prompt`).
+  - **Auditoria Transparente**: Logs detalhados de cada interação, incluindo cálculo real de **Confiança (RAG Score)**.
+  - **Limpeza de Dados**: Botões para limpar histórico de logs e reiniciar métricas.
+- **Privacidade Radical**: Processamento 100% local com anonimização de usuários (SHA256).
+
+## 🎮 Como Usar
+
+### 1. Ingestão de Documentos
+Você pode adicionar documentos de duas formas:
+- **Upload Manual**: Botão `+ Upload Manual` no painel.
+- **Scan Local**:
+  1. Coloque arquivos na pasta `data/ingest`.
+  2. Clique em `📁 Scan Pasta Local`.
+  3. Selecione os arquivos e defina o tipo (Lei, Documento OCR, etc.).
+  4. Clique em Confirmar.
+
+### 2. Ajustando a IA
+- Clique em **⚙️ Prompt** no topo da tela.
+- Edite o texto para mudar como o Sentinela responde (ex: "Seja mais formal", "Cite sempre o artigo").
+- Clique em Salvar. A mudança é imediata.
+
+### 3. Verificando a Confiança
+- Após uma resposta no Chat, abra o modal **📊 Status / Auditoria**.
+- Verifique a coluna **Confiança**:
+  - **0%**: A IA não encontrou base nos documentos (cuidado com alucinações).
+  - **>70%**: Resposta fortemente embasada nos textos recuperados.
 
 ## 🛠️ Arquitetura
 
