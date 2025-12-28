@@ -31,6 +31,8 @@
             <header>
                 <h1>Gestão de Documentos</h1>
                 <div class="actions">
+                    <button id="promptBtn" class="btn secondary"
+                        style="background: #0f172a; color: #a5b4fc; border: 1px solid #334155;">⚙️ Prompt</button>
                     <button id="refreshBtn" class="btn secondary">🔄 Atualizar</button>
                     <button id="scanLocalBtn" class="btn secondary"
                         style="background: #0f172a; color: #fff; border: 1px solid #334155;">📁 Scan Pasta
@@ -38,6 +40,24 @@
                     <button id="uploadBtn" class="btn primary">+ Upload Manual</button>
                 </div>
             </header>
+            ...
+            <!-- Prompt Editor Modal -->
+            <div id="promptModal" class="modal hidden">
+                <div class="modal-content"
+                    style="width: 80%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+                    <h3>⚙️ Editor de Prompt do Sistema</h3>
+                    <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">
+                        Defina as instruções de comportamento, bioética e formatação da IA do Sentinela.
+                    </p>
+                    <textarea id="systemPromptInput"
+                        style="flex:1; background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:15px; border-radius:6px; font-family:monospace; line-height:1.5; resize:none;"></textarea>
+
+                    <div class="modal-actions" style="margin-top:1rem;">
+                        <button onclick="closePromptModal()" class="btn secondary">Cancelar</button>
+                        <button onclick="saveSystemPrompt()" class="btn primary">Salvar Alterações</button>
+                    </div>
+                </div>
+            </div>
 
             <div class="stats-cards">
                 <div class="card">

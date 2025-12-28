@@ -75,6 +75,52 @@ async function fetchAuditoria() {
 }
 
 
+// Prompt Editor Logic
+const promptBtn = document.getElementById('promptBtn');
+const promptModal = document.getElementById('promptModal');
+const systemPromptInput = document.getElementById('systemPromptInput');
+
+promptBtn.addEventListener('click', openPromptModal);
+
+async function openPromptModal() {
+    promptModal.classList.remove('hidden');
+    promptModal.style.display = 'flex';
+    systemPromptInput.value = "Carregando...";
+    try {
+        const res = await fetch('/api/admin/prompt');
+        const data = await res.json();
+        systemPromptInput.value = data.content;
+    } catch (e) {
+        systemPromptInput.value = "Erro ao carregar prompt: " + e.message;
+    }
+}
+
+function closePromptModal() {
+    promptModal.classList.add('hidden');
+    promptModal.style.display = 'none';
+}
+
+async function saveSystemPrompt() {
+    const newContent = systemPromptInput.value;
+    try {
+        const res = await fetch('/api/admin/prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: newContent })
+        });
+        if (res.ok) {
+            alert("Prompt salvo com sucesso!");
+            closePromptModal();
+        } else {
+            alert("Erro ao salvar prompt.");
+        }
+    } catch (e) {
+        alert("Erro de conexão: " + e.message);
+    }
+}
+window.closePromptModal = closePromptModal; // Make global for onclick
+window.saveSystemPrompt = saveSystemPrompt;
+
 // DOM Elements
 const docsTableBody = document.getElementById('docsTableBody');
 const totalDocsEl = document.getElementById('totalDocs');

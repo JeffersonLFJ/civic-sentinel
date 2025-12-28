@@ -72,6 +72,17 @@ async def get_system_prompt():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/prompt")
+async def update_system_prompt(update: PromptUpdate):
+    """
+    Updates the system prompt file.
+    """
+    try:
+        PROMPT_FILE.write_text(update.content, encoding="utf-8")
+        return {"status": "success", "message": "Prompt atualizado com sucesso."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/logs")
 async def get_system_logs(lines: int = 100):
     """
