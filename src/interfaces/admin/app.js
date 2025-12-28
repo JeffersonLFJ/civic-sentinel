@@ -113,12 +113,26 @@ function startLogPolling() {
                 if (logsJoined.includes('🎉 Indexação concluída')) {
                     updateProgress(100);
                     showCloseButton();
-                } else if (logsJoined.includes('🧠 Gerando fragmentos')) {
+                } else if (logsJoined.includes('📊 Progresso de indexação: Lote')) {
+                    // Extract X/Y from "Lote X/Y"
+                    const match = logsJoined.match(/Lote (\d+)\/(\d+)/);
+                    if (match) {
+                        const current = parseInt(match[1]);
+                        const total = parseInt(match[2]);
+                        // Scale 80% to 99% based on batches
+                        const prog = 80 + Math.floor((current / total) * 19);
+                        updateProgress(prog);
+                    } else {
+                        updateProgress(85);
+                    }
+                } else if (logsJoined.includes('🧠 Iniciando indexação')) {
                     updateProgress(80);
+                } else if (logsJoined.includes('🔍 Fragmentando texto')) {
+                    updateProgress(75);
                 } else if (logsJoined.includes('📝 Registro salvo')) {
-                    updateProgress(60);
+                    updateProgress(70);
                 } else if (logsJoined.includes('🗄️ Registrando metadados')) {
-                    updateProgress(50);
+                    updateProgress(60);
                 } else if (logsJoined.includes('✅ Texto extraído')) {
                     updateProgress(40);
                 } else if (logsJoined.includes('🔍 Iniciando extração')) {

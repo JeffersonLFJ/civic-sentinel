@@ -134,6 +134,19 @@
             </div>
         </div>
     </div>
+    <div id="logsModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📜 Logs do Sistema</h3>
+                <button class="btn secondary" onclick="closeLogs()">Fechar</button>
+            </div>
+            <div id="logsContainer"
+                style="flex: 1; background: #0f172a; padding: 1rem; overflow-y: auto; font-family: monospace; color: #a5b4fc; font-size: 0.85rem; border-radius: 6px; border: 1px solid #334155;">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
 
     <script src="inspector.js"></script>
     <script>

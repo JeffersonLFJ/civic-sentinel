@@ -199,9 +199,11 @@ class DatabaseManager:
         context_header += " \n "
 
         # 2. Split with Context (Injected into every chunk)
+        logger.info(f"🔍 Fragmentando texto em blocos para indexação...")
         chunks = text_splitter.split(text, doc_type=doc_type, context_prefix=context_header)
         
         if not chunks:
+            logger.warning("⚠️ Nenhum chunk gerado após fragmentação.")
             return
 
         collection = self.chroma_client.get_or_create_collection("sentinela_documents")
@@ -210,7 +212,7 @@ class DatabaseManager:
         batch_size = 50
         total_chunks = len(chunks)
         
-        logger.info(f"Start Indexing: {total_chunks} chunks to process for doc {doc_id}...")
+        logger.info(f"🧠 Iniciando indexação vetorial: {total_chunks} fragmentos detectados.")
         
         for i in range(0, total_chunks, batch_size):
             end_idx = min(i + batch_size, total_chunks)
@@ -234,10 +236,9 @@ class DatabaseManager:
                     metadatas=batch_metadatas,
                     ids=batch_ids
                 )
-                logger.info(f"Indexing progress: Batch {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} ({end_idx}/{total_chunks}) saved.")
+                logger.info(f"📊 Progresso de indexação: Lote {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} ({end_idx}/{total_chunks}) salvo.")
             except Exception as e:
                 logger.error(f"Indexing batch failed at index {i}: {e}")
-                # Continue? Or fail hard? For now, log and continue to save what we can.
                 
         logger.info(f"Indexing complete for doc {doc_id}.")
 
