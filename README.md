@@ -62,6 +62,13 @@ Para rodar via Docker Compose:
 docker-compose up --build
 ```
 
+## ⚖️ Compromissos Bioéticos (Privacy by Design)
+
+O Sentinela implementa restrições técnicas invioláveis baseadas na tese de Justiça Epistêmica:
+1.  **Anonimato Radical**: Nenhum dado pessoal cru é persistido; identificadores são convertidos via SHA256 antes do processamento.
+2.  **Soberania Tecnológica**: Dependência zero de Big Techs. Todo o processamento (OCR e LLM) ocorre *on-premise*.
+3.  **Auditabilidade**: Cada inferência da IA carrega metadados de confiança e versão do prompt utilizado.
+
 ## 📄 Licença
 
 Este projeto está licenciado sob a **Mozilla Public License 2.0 (MPL 2.0)**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

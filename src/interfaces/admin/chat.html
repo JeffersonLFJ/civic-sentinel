@@ -94,11 +94,19 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         const API_URL = '/api/chat/';
         const msgs = document.getElementById('messages');
         const input = document.getElementById('userInput');
         const userId = 'admin_debug_' + Math.random().toString(36).substr(2, 9);
+        let messagesHistory = []; // Array of {role, content}
+
+        // Configure marked to be safe
+        marked.setOptions({
+            sanitize: false, // We trust our own API, but in prod we should be careful
+            breaks: true
+        });
 
         function handleKey(e) {
             if (e.key === 'Enter') sendMessage();
@@ -110,6 +118,12 @@
 
             // User Msg
             addMsg(text, 'user');
+
+            // Add to history
+            messagesHistory.push({ role: 'user', content: text });
+            // Limit history to last 10 turns (20 messages)
+            if (messagesHistory.length > 20) messagesHistory.shift();
+
             input.value = '';
             input.disabled = true;
 
@@ -119,25 +133,37 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: text,
-                        user_id: userId
+                        user_id: userId,
+                        history: messagesHistory.slice(0, -1) // Send previous history (excluding the current user message)
                     })
                 });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.detail || 'Erro desconhecido no servidor');
+                }
 
                 const data = await res.json();
 
                 // Bot Msg + Citations
-                let content = data.response;
+                let content = data.response || 'O Sentinela não retornou uma resposta válida.';
+
+                // Add bot response to history
+                messagesHistory.push({ role: 'assistant', content: content });
+
+                // Render Markdown
+                let htmlContent = marked.parse(content);
 
                 // Append citations if any
                 if (data.metadata?.citations?.length > 0) {
-                    content += "<div class='meta'><strong>Fontes:</strong><ul>";
+                    htmlContent += "<div class='meta'><strong>Fontes:</strong><ul>";
                     data.metadata.citations.forEach(c => {
-                        content += `<li>${c.filename} (${c.publication_date || 's/d'})</li>`;
+                        htmlContent += `<li>${c.filename} (${c.publication_date || 's/d'})</li>`;
                     });
-                    content += "</ul></div>";
+                    htmlContent += "</ul></div>";
                 }
 
-                addMsg(content, 'bot', true);
+                addMsg(htmlContent, 'bot', true);
             } catch (e) {
                 addMsg(`Erro: ${e.message}`, 'bot');
             } finally {
