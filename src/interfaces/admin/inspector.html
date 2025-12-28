@@ -83,9 +83,9 @@
             </div>
             <nav>
                 <a href="index.html">📄 Documentos</a>
+                <a href="#" onclick="openAuditoriaModal()">📊 Auditoria & Citações</a>
                 <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
                 <a href="inspector.html" class="active">🔍 Inspetor de Dados</a>
-                <a href="prompt.html">🧠 System Prompt</a>
                 <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
             </nav>
         </aside>
@@ -110,24 +110,39 @@
         </main>
     </div>
 
-    <!-- Logs Modal -->
-    <div id="logsModal" class="modal hidden">
-        <div class="modal-content" style="width: 80%; max-width: 900px; height: 80vh;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                <h3>Logs do Sistema</h3>
-                <button class="btn secondary" onclick="closeLogs()">Fechar</button>
+    <div id="auditoriaModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>Auditoria de Citações e Inteligência</h3>
+                <button class="btn secondary" onclick="closeAuditoria()">Fechar</button>
             </div>
-            <div id="logsContainer"
-                style="height: 90%; background: #0f172a; padding: 1rem; overflow-y: auto; font-family: monospace; color: #a5b4fc;">
+            <div style="flex: 1; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                            <th style="padding: 12px;">Data/Hora</th>
+                            <th style="padding: 12px;">Ação</th>
+                            <th style="padding: 12px;">Citações / Detalhes</th>
+                            <th style="padding: 12px;">Confiança</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <script src="inspector.js"></script>
     <script>
-        // Shared Log Logic (Compact)
+        // Shared UI Logic for Inspector Page
         const logsModal = document.getElementById('logsModal');
         const logsContainer = document.getElementById('logsContainer');
+        const auditoriaModal = document.getElementById('auditoriaModal');
+        const auditTableBody = document.getElementById('auditTableBody');
+
         function openLogs() {
             logsModal.classList.remove('hidden');
             logsModal.style.display = 'flex';
@@ -139,6 +154,39 @@
         function closeLogs() {
             logsModal.classList.add('hidden');
             logsModal.style.display = 'none';
+        }
+
+        function openAuditoriaModal() {
+            auditoriaModal.classList.remove('hidden');
+            auditoriaModal.style.display = 'flex';
+            fetchAuditoria();
+        }
+        function closeAuditoria() {
+            auditoriaModal.classList.add('hidden');
+            auditoriaModal.style.display = 'none';
+        }
+
+        async function fetchAuditoria() {
+            auditTableBody.innerHTML = '<tr><td colspan="4">Carregando auditoria...</td></tr>';
+            try {
+                const res = await fetch('/api/admin/stats');
+                const data = await res.json();
+                const logs = data.audit_logs || [];
+                if (logs.length === 0) {
+                    auditTableBody.innerHTML = '<tr><td colspan="4">Nenhum log de auditoria encontrado.</td></tr>';
+                    return;
+                }
+                auditTableBody.innerHTML = logs.map(log => `
+                    <tr>
+                        <td style="padding:10px; border-bottom:1px solid #1e293b;">${new Date(log.timestamp).toLocaleString()}</td>
+                        <td style="padding:10px; border-bottom:1px solid #1e293b;"><span style="color:#a5b4fc">${log.action}</span></td>
+                        <td style="padding:10px; border-bottom:1px solid #1e293b; font-size:0.85rem">${log.details}</td>
+                        <td style="padding:10px; border-bottom:1px solid #1e293b; color:#22c55e">${log.confidence_score ? (log.confidence_score * 100).toFixed(0) + '%' : 'N/A'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                auditTableBody.innerHTML = `<tr><td colspan="4" style="color:red">Erro: ${e.message}</td></tr>`;
+            }
         }
     </script>
 </body>
