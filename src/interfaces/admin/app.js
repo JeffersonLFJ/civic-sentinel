@@ -209,25 +209,97 @@ document.addEventListener('DOMContentLoaded', () => {
 // Actions
 refreshBtn.addEventListener('click', fetchDocuments);
 
-// Scan Local Action
+// Scan Local logic
 const scanLocalBtn = document.getElementById('scanLocalBtn');
-scanLocalBtn.addEventListener('click', async () => {
-    showLoading("Escaneando Pasta Local", "Verificando data/ingest por novos documentos...");
-    startLogPolling();
+const scanModal = document.getElementById('scanModal');
+const scanTableBody = document.getElementById('scanTableBody');
+
+scanLocalBtn.addEventListener('click', openScanModal);
+
+function openScanModal() {
+    scanModal.classList.remove('hidden');
+    scanModal.style.display = 'flex';
+    fetchLocalFiles();
+}
+
+function closeScanModal() {
+    scanModal.classList.add('hidden');
+    scanModal.style.display = 'none';
+}
+
+async function fetchLocalFiles() {
+    scanTableBody.innerHTML = '<tr><td colspan="4">Buscando arquivos...</td></tr>';
     try {
-        const res = await fetch('/api/admin/ingest/local-scan', { method: 'POST' });
+        const res = await fetch('/api/admin/ingest/list');
         const data = await res.json();
-        alert(data.message);
-        fetchDocuments();
-    } catch (e) {
-        alert("Erro no scan: " + e.message);
-    } finally {
-        if (!closeLoadingBtn.style.display || closeLoadingBtn.style.display === 'none') {
-            hideLoading();
-            stopLogPolling();
+        const files = data.files || [];
+
+        if (files.length === 0) {
+            scanTableBody.innerHTML = '<tr><td colspan="4">Nenhum arquivo encontrado em data/ingest.</td></tr>';
+            return;
         }
+
+        scanTableBody.innerHTML = files.map(f => `
+            <tr>
+                <td style="padding:10px;"><input type="checkbox" class="scan-checkbox" data-filename="${f.filename}"></td>
+                <td style="padding:10px;">${f.filename}</td>
+                <td style="padding:10px; color:#94a3b8;">${(f.size / 1024).toFixed(1)} KB</td>
+                <td style="padding:10px;">
+                    <select class="scan-type-select" style="background:#1e293b; border:1px solid #334155; color:white; padding:4px; border-radius:4px; font-size:0.85rem;">
+                        <option value="lei" ${f.suggested_type === 'lei' ? 'selected' : ''}>Lei / Legislação (HTML)</option>
+                        <option value="denuncia" ${f.suggested_type === 'denuncia' ? 'selected' : ''}>Documentos (Imagens e PDF)</option>
+                        <option value="diario" ${f.suggested_type === 'diario' ? 'selected' : ''}>Diário Oficial</option>
+                        <option value="tabela" ${f.suggested_type === 'tabela' ? 'selected' : ''}>Planilhas / Tabelas</option>
+                    </select>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        scanTableBody.innerHTML = `<tr><td colspan="4" style="color:red">Erro: ${e.message}</td></tr>`;
     }
-});
+}
+
+window.toggleAllScan = (el) => {
+    const checks = document.querySelectorAll('.scan-checkbox');
+    checks.forEach(c => c.checked = el.checked);
+};
+
+window.applyBulkType = () => {
+    const type = document.getElementById('bulkDocType').value;
+    if (!type) return;
+    const checks = document.querySelectorAll('.scan-checkbox:checked');
+    checks.forEach(c => {
+        const row = c.closest('tr');
+        row.querySelector('.scan-type-select').value = type;
+    });
+};
+
+window.processSelectedScan = async () => {
+    const checks = document.querySelectorAll('.scan-checkbox:checked');
+    if (checks.length === 0) return alert("Selecione ao menos um arquivo!");
+
+    const items = Array.from(checks).map(c => ({
+        filename: c.dataset.filename,
+        doc_type: c.closest('tr').querySelector('.scan-type-select').value
+    }));
+
+    closeScanModal();
+    showLoading("Processando Ingestão Local", `Iniciando processamento de ${items.length} arquivos...`);
+    startLogPolling();
+
+    try {
+        const res = await fetch('/api/admin/ingest/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items })
+        });
+        const data = await res.json();
+        // Progress will be updated by log polling
+    } catch (e) {
+        alert("Erro no processamento: " + e.message);
+        hideLoading();
+    }
+};
 
 // Upload Action
 uploadBtn.addEventListener('click', () => {
@@ -279,7 +351,7 @@ function closeModal() {
 // Logic
 async function fetchDocuments() {
     try {
-        if (docsTableBody) docsTableBody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+        if (docsTableBody) docsTableBody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
 
         // Parallel Fetch: Docs and Stats
         const [docsRes, statsRes] = await Promise.all([
@@ -295,12 +367,9 @@ async function fetchDocuments() {
         // Render Stats
         if (totalDocsEl) totalDocsEl.textContent = stats.total_documents;
 
-        // Update other cards if IDs existed (Added dynamically if needed or just logged)
-        // I will assume simple update for now.
-
     } catch (e) {
         console.error(e);
-        docsTableBody.innerHTML = '<tr><td colspan="5" style="color:red">Erro ao carregar dados.</td></tr>';
+        if (docsTableBody) docsTableBody.innerHTML = '<tr><td colspan="6" style="color:red">Erro ao carregar dados.</td></tr>';
     }
 }
 
@@ -309,7 +378,7 @@ function renderTable(docs) {
     docsTableBody.innerHTML = '';
 
     if (docs.length === 0) {
-        docsTableBody.innerHTML = '<tr><td colspan="5">Nenhum documento encontrado.</td></tr>';
+        docsTableBody.innerHTML = '<tr><td colspan="6">Nenhum documento encontrado.</td></tr>';
         return;
     }
 
@@ -321,12 +390,28 @@ function renderTable(docs) {
         if (doc.source === 'api_querido_diario' || doc.source === 'official_gazette') source = 'Diário Oficial';
         if (doc.source === 'local_ingest') source = 'Vigilância Local';
 
+        // Mapeamento amigável de tipos
+        const typeMap = {
+            'lei': '📜 Lei (HTML)',
+            'denuncia': '📄 Documento (OCR)',
+            'diario': '📰 Diário Oficial',
+            'tabela': '📊 Planilha/Tabela'
+        };
+        const displayType = typeMap[doc.doc_type] || doc.doc_type || '-';
+
+        // Status útil (Ref. Processamento)
+        let statusDisplay = doc.ocr_method || 'Processado';
+        if (statusDisplay === 'direct_pdf') statusDisplay = '📝 PDF Nativo';
+        if (statusDisplay === 'tesseract') statusDisplay = '🔍 OCR (Tesseract)';
+        if (statusDisplay === 'vision_fallback') statusDisplay = '👁️ IA Vision';
+        if (statusDisplay === 'html_law_parser') statusDisplay = '🏛️ HTML Parser';
+
         row.innerHTML = `
             <td>${doc.filename}</td>
             <td><span style="font-size:0.8rem; padding:2px 6px; background:#334155; border-radius:4px;">${source}</span></td>
-            <td><span style="font-size:0.8rem; color:#a5b4fc;">${doc.doc_type || '-'}</span></td>
+            <td><span style="font-size:0.8rem; color:#a5b4fc;">${displayType}</span></td>
             <td>${date}</td>
-            <td>${doc.ocr_method || 'N/A'}</td>
+            <td><span style="font-size:0.85rem; color:#22c55e;">${statusDisplay}</span></td>
             <td>
                 <button class="btn danger-sm" onclick="requestDelete('${doc.id}')">Excluir</button>
             </td>

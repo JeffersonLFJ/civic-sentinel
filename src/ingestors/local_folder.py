@@ -19,72 +19,61 @@ class LocalFolderIngestor:
         self.watch_path = settings.INGEST_DIR
         self.watch_path.mkdir(parents=True, exist_ok=True)
         
-    async def scan_and_process(self) -> Dict:
+    async def list_pending_files(self) -> List[Dict]:
         """
-        Varre a pasta, identifica arquivos (PDF, imagens) e submete ao motor de OCR/Indexação.
+        Lista arquivos na pasta de ingestão e sugere um tipo baseado na extensão.
         """
         files = list(self.watch_path.glob("*"))
-        # Filtra extensões suportadas
-        supported_exts = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.txt'}
-        files_to_process = [f for f in files if f.suffix.lower() in supported_exts]
+        supported_exts = {'.pdf', '.png', '.jpg', '.jpeg', '.txt', '.html', '.xlsx', '.csv'}
+        pending = []
         
-        if not files_to_process:
-            logger.info("Nenhum arquivo encontrado para ingestão local.")
-            return {"processed": 0, "skipped": 0, "errors": 0}
+        for f in files:
+            if f.suffix.lower() in supported_exts:
+                # Sugestão básica de tipo
+                ext = f.suffix.lower()
+                suggested_type = "denuncia" # Default (PDF/Imagens)
+                if ext == ".html": suggested_type = "lei"
+                elif ext in {".xlsx", ".csv"}: suggested_type = "tabela"
+                elif "diario" in f.name.lower(): suggested_type = "diario"
+                
+                pending.append({
+                    "filename": f.name,
+                    "size": f.stat().st_size,
+                    "suggested_type": suggested_type,
+                    "path": str(f)
+                })
+        return pending
 
+    async def process_selected_files(self, items: List[Dict]) -> Dict:
+        """
+        Processa uma lista de arquivos com seus respectivos tipos definidos pelo usuário.
+        item: {"filename": "doc.pdf", "doc_type": "lei"}
+        """
         results = {"processed": 0, "skipped": 0, "errors": 0}
         
-        for file_path in files_to_process:
+        for item in items:
+            filename = item["filename"]
+            doc_type = item["doc_type"]
+            file_path = self.watch_path / filename
+            
+            if not file_path.exists():
+                logger.error(f"Arquivo não encontrado para processamento: {filename}")
+                results["errors"] += 1
+                continue
+                
             try:
-                # 1. Verifica se já foi ingerido (Deduplicação simples por nome de arquivo para o MVP)
-                # O save_document_record poderia ser verificado antes, mas vamos processar e deixar o banco lidar se necessário,
-                # ou checar aqui se já existe um registro com este nome.
+                logger.info(f"🚀 Ingestão Local: Processando {filename} como {doc_type}")
                 
-                logger.info(f"Processando arquivo local: {file_path.name}")
+                # Reutilizamos a lógica de upload para manter consistência
+                from src.interfaces.api.routes.upload import process_document_task
+                # Mockamos o upload_dir enviando o path direto
+                # Como process_document_task espera um path e doc_type, funciona:
+                await process_document_task(str(file_path), filename, "local_ingest", doc_type)
                 
-                # 2. OCR / Extração de Texto
-                ocr_results = await ocr_engine.process_document(str(file_path), doc_type="auto")
-                text = ocr_results.get("extracted_text", "")
-                
-                if not text.strip():
-                    logger.warning(f"Nenhum texto extraído de {file_path.name}. Pulando.")
-                    results["skipped"] += 1
-                    continue
-                
-                # 3. Salva Registro no SQLite
-                doc_data = {
-                    "filename": file_path.name,
-                    "source": "local_ingest",
-                    "storage_path": str(file_path),
-                    "text_content": text,
-                    "ocr_method": ocr_results.get("ocr_method", "local"),
-                }
-                
-                doc_id = await db_manager.save_document_record(doc_data)
-                
-                # 4. Indexação no ChromaDB
-                metadata = {
-                    "filename": file_path.name,
-                    "source": "local_ingest",
-                    "ingested_at": ocr_results.get("timestamp")
-                }
-                
-                await db_manager.index_document_text(
-                    doc_id=doc_id,
-                    text=text,
-                    metadata=metadata
-                )
-                
-                logger.info(f"Ingestão local concluída com sucesso: {file_path.name}")
                 results["processed"] += 1
                 
-                # Opcional: Mover arquivo para uma pasta 'processed' para evitar re-processamento
-                # processed_root = self.watch_path / "processed"
-                # processed_root.mkdir(exist_ok=True)
-                # file_path.rename(processed_root / file_path.name)
-                
             except Exception as e:
-                logger.error(f"Erro ao processar {file_path.name}: {e}")
+                logger.error(f"Erro ao processar localmente {filename}: {e}")
                 results["errors"] += 1
                 
         return results

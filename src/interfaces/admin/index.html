@@ -183,6 +183,60 @@
         </div>
     </div>
 
+    <!-- Scan Local Modal -->
+    <div id="scanModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 90%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📁 Scan de Pasta Local (data/ingest)</h3>
+                <button class="btn secondary" onclick="closeScanModal()">Fechar</button>
+            </div>
+
+            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1rem;">
+                Os arquivos abaixo foram encontrados na pasta local. Escolha o tipo de cada um e clique em "Iniciar
+                Ingestão".
+            </p>
+
+            <div
+                style="margin-bottom: 1rem; display: flex; gap: 10px; align-items: center; background: #0f172a; padding: 10px; border-radius: 6px;">
+                <span style="font-size: 0.85rem; color: #94a3b8;">Definir em bloco:</span>
+                <select id="bulkDocType"
+                    style="background: #1e293b; border: 1px solid #334155; color: white; padding: 5px; border-radius: 4px; font-size: 0.85rem;">
+                    <option value="">-- Selecione --</option>
+                    <option value="lei">Lei / Legislação (HTML)</option>
+                    <option value="denuncia">Documentos (Imagens e PDF)</option>
+                    <option value="tabela">Planilhas / Tabelas</option>
+                    <option value="diario">Diário Oficial</option>
+                </select>
+                <button class="btn secondary" style="padding: 5px 10px; font-size: 0.85rem;"
+                    onclick="applyBulkType()">Aplicar Selecionados</button>
+            </div>
+
+            <div style="flex: 1; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                            <th style="padding: 10px;"><input type="checkbox" id="selectAllScan"
+                                    onclick="toggleAllScan(this)"></th>
+                            <th style="padding: 10px;">Arquivo</th>
+                            <th style="padding: 10px;">Tamanho</th>
+                            <th style="padding: 10px;">Tipo de Ingestão</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scanTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem;">
+                <button onclick="closeScanModal()" class="btn secondary">Cancelar</button>
+                <button onclick="processSelectedScan()" class="btn primary" id="startIngestBtn">Iniciar
+                    Ingestão</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js?v=4"></script>
 </body>
 

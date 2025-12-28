@@ -4,117 +4,83 @@ from src.config import settings
 import shutil
 import os
 from pathlib import Path
+import logging
+from typing import Dict, Any, List, Optional
 
+logger = logging.getLogger("src.interfaces.api.routes.upload")
 router = APIRouter()
 
-@router.post("/")
-async def upload_document(
-    file: UploadFile = File(...),
-    source: str = Form("user"), # "user" or "admin"
-    doc_type: str = Form("generico") # "lei", "denuncia", "generico", "diario"
-):
+async def process_document_task(file_location: str, filename: str, source: str, doc_type: str):
     """
-    Uploads a document with explicit type metadata.
-    - lei (HTML): Uses structured parsing.
-    - denuncia/generico: Uses OCR.
+    Função core de processamento compartilhada entre Upload manual e Scan Local.
     """
-    temp_dir = settings.DATA_DIR / "uploads_temp"
     processed_dir = settings.DATA_DIR / "processed"
-    
-    temp_dir.mkdir(parents=True, exist_ok=True)
     processed_dir.mkdir(parents=True, exist_ok=True)
     
-    file_location = temp_dir / file.filename
+    file_path = Path(file_location)
     
     try:
-        # Save file tentatively
-        import logging
-        logger = logging.getLogger("src.interfaces.api.routes.upload")
-        
-        logger.info(f"💾 Salvando arquivo ({doc_type}): {file.filename}")
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
         # Decision Logic based on DocType
         ocr_result = {"extracted_text": "", "ocr_method": "unknown"}
         structured_chunks = None # Specific for Laws
         
-        if doc_type == "lei" and file.filename.lower().endswith((".html", ".htm")):
-            # Specialized HTML Law Ingestion
+        if doc_type == "lei" and filename.lower().endswith((".html", ".htm")):
             from src.ingestors.html_law import html_law_ingestor
-            logger.info("⚖️ Detectado Lei em HTML. Iniciando parsing estruturado...")
-            
-            result = await html_law_ingestor.process_file(str(file_location), file.filename)
+            logger.info(f"⚖️ Ingestão: {filename} detectado como Lei.")
+            result = await html_law_ingestor.process_file(str(file_path), filename)
             
             if result["status"] == "success":
                 ocr_result["extracted_text"] = result["full_text"]
-                ocr_result["ocr_method"] = "html_law_parse"
+                ocr_result["ocr_method"] = "html_law_parser"
                 structured_chunks = result["chunks"]
-                logger.info(f"✅ Lei processada: {result['total_articles']} artigos identificados.")
             else:
-                logger.error("Falha no parsing HTML. Tentando fallback texto simples.")
-                ocr_result["extracted_text"] = Path(file_location).read_text(errors="ignore")
+                ocr_result["extracted_text"] = file_path.read_text(errors="ignore")
         
         elif doc_type == "tabela":
-            # Spreadsheet Ingestion (Bypass OCR)
-            logger.info("📊 Detectada Planilha/Tabela. Processando dados estruturados...")
+            logger.info(f"📊 Ingestão: {filename} detectado como Tabela.")
             import csv
-            
             extracted_text = ""
-            if file.filename.lower().endswith(".csv"):
-                with open(file_location, 'r', encoding='utf-8', errors='replace') as f:
+            if filename.lower().endswith(".csv"):
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                     reader = csv.reader(f)
                     rows = list(reader)
-                    # Convert to Markdown Table for LLM readability
                     if rows:
                         header = "| " + " | ".join(rows[0]) + " |"
                         separator = "| " + " | ".join(["---"] * len(rows[0])) + " |"
                         body = "\n".join(["| " + " | ".join(row) + " |" for row in rows[1:]])
                         extracted_text = f"{header}\n{separator}\n{body}"
                     extract_method = "csv_direct"
-            elif file.filename.lower().endswith((".xlsx", ".xls")):
-                # Try pandas
+            elif filename.lower().endswith((".xlsx", ".xls")):
                 try:
                     import pandas as pd
-                    df = pd.read_excel(file_location)
+                    df = pd.read_excel(file_path)
                     extracted_text = df.to_markdown(index=False)
                     extract_method = "excel_pandas"
-                except ImportError:
-                    extracted_text = "Erro: Pandas não instalado para processar Excel. Use CSV."
-                    extract_method = "failed_excel"
                 except Exception as e:
-                    extracted_text = f"Erro ao ler Excel: {str(e)}"
+                    extracted_text = f"Erro Excel: {e}"
                     extract_method = "failed_excel"
-            else:
-                extracted_text = "Formato não suportado para Tabela."
-                extract_method = "invalid_format"
             
             ocr_result["extracted_text"] = extracted_text
             ocr_result["ocr_method"] = extract_method
-            logger.info(f"✅ Tabela processada via {extract_method}.")
 
         else:
-            # Standard Parsing (OCR or Text)
-            logger.info(f"🔍 Iniciando extração padrão (OCR/PDF) para {file.filename}...")
-            ocr_result = await ocr_engine.process_document(str(file_location))
-            logger.info(f"✅ Texto extraído com sucesso ({ocr_result['ocr_method']}).")
+            logger.info(f"🔍 Ingestão: {filename} processamento padrão (OCR/PDF).")
+            ocr_result = await ocr_engine.process_document(str(file_path))
         
         # Persistence Logic
         storage_path = None
-        if source == "admin":
-            final_path = processed_dir / file.filename
-            shutil.move(str(file_location), str(final_path))
+        if source == "admin" or source == "local_ingest":
+            # Se for admin, movemos para processed. 
+            # Se for local_ingest, COPIAMOS (ou movemos se preferir, manteremos compatibilidade com admin)
+            final_path = processed_dir / filename
+            if str(file_path) != str(final_path):
+                shutil.copy2(str(file_path), str(final_path))
             storage_path = str(final_path)
-        else:
-            if file_location.exists():
-                os.remove(file_location)
-                
-        # Save to DB (SQLite)
-        logger.info("🗄️ Registrando metadados no SQLite...")
-        from src.core.database import db_manager
         
+        # Save DB
+        from src.core.database import db_manager
         doc_data = {
-            "filename": file.filename,
+            "filename": filename,
             "source": source,
             "storage_path": storage_path,
             "text_content": ocr_result["extracted_text"],
@@ -124,40 +90,52 @@ async def upload_document(
         
         doc_id = await db_manager.save_document_record(doc_data)
         
-        # Save to Vector DB (Chroma)
-        logger.info("🧠 Indexando no banco vetorial (ChromaDB)...")
-        
+        # Index Chroma
         if structured_chunks:
-             # If we have perfect chunks from LawScraper, use them directly!
-             # We need a new method in database.py or adapt index_document_text
-             # For now, let's allow index_document_text to handle list of chunks if provided?
-             # Or we call a new method. Let's add `index_structured_chunks` to db helper or hack existing.
-             # Easiest: Call index_document_text but pass the pre-made chunks? No, that method splits.
-             # Better: Add `index_pre_chunked_data` to database.py.
-             await db_manager.index_pre_chunked_data(
-                 doc_id=doc_id, 
-                 chunks=structured_chunks, 
-                 base_metadata={"source": source, "filename": file.filename, "doc_type": doc_type}
-             )
+            await db_manager.index_pre_chunked_data(
+                doc_id=doc_id, 
+                chunks=structured_chunks, 
+                base_metadata={"source": source, "filename": filename, "doc_type": doc_type}
+            )
         else:
-            # Standard splitting
             await db_manager.index_document_text(
                 doc_id=doc_id, 
                 text=doc_data["text_content"],
-                metadata={"source": source, "filename": file.filename, "doc_type": doc_type}
+                metadata={"source": source, "filename": filename, "doc_type": doc_type}
             )
             
-        logger.info("🎉 Indexação concluída com sucesso!")
-        
-        return {
-            "status": "processed",
-            "doc_id": doc_id,
-            "filename": file.filename,
-            "method": ocr_result["ocr_method"]
-        }
+        logger.info(f"🎉 Indexação concluída com sucesso! ID: {doc_id}")
+        return doc_id
         
     except Exception as e:
-        if file_location.exists():
-            os.remove(file_location)
-        logger.error(f"Erro critical upload: {e}")
+        logger.error(f"❌ Erro no processamento de {filename}: {e}")
+        raise e
+
+@router.post("/")
+async def upload_document(
+    file: UploadFile = File(...),
+    source: str = Form("user"),
+    doc_type: str = Form("generico")
+):
+    temp_dir = settings.DATA_DIR / "uploads_temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    file_location = temp_dir / file.filename
+    
+    try:
+        logger.info(f"💾 Recebendo upload: {file.filename}")
+        with open(file_location, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        doc_id = await process_document_task(str(file_location), file.filename, source, doc_type)
+        
+        # Cleanup temp
+        if source != "admin": # Admin logic moves it in task or copies
+             if file_location.exists(): os.remove(file_location)
+        else:
+             if file_location.exists(): os.remove(file_location) # Já copiado para processed
+
+        return {"status": "processed", "doc_id": doc_id}
+        
+    except Exception as e:
+        if file_location.exists(): os.remove(file_location)
         raise HTTPException(status_code=500, detail=str(e))

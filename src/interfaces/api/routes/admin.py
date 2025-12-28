@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Body
+from typing import List, Dict
 from pydantic import BaseModel
 from pathlib import Path
 from src.core.database import db_manager
@@ -121,18 +122,32 @@ async def trigger_nova_iguacu_ingestion(request: IngestionRequest = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ingest/local-scan")
-async def trigger_local_folder_scan():
+@router.get("/ingest/list")
+async def list_local_files():
     """
-    Scans the data/ingest folder for new files and processes them.
-    Useful when external APIs are unstable.
+    Lista arquivos pendentes na pasta data/ingest.
     """
     from src.ingestors.local_folder import local_ingestor
     try:
-        results = await local_ingestor.scan_and_process()
+        files = await local_ingestor.list_pending_files()
+        return {"status": "success", "files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LocalProcessRequest(BaseModel):
+    items: List[Dict[str, str]] # [{"filename": "...", "doc_type": "..."}]
+
+@router.post("/ingest/process")
+async def process_local_files(request: LocalProcessRequest):
+    """
+    Processa arquivos selecionados com tipos específicos.
+    """
+    from src.ingestors.local_folder import local_ingestor
+    try:
+        results = await local_ingestor.process_selected_files(request.items)
         return {
             "status": "success",
-            "message": f"Scan complete. Processed: {results['processed']}, Skipped: {results['skipped']}, Errors: {results['errors']}",
+            "message": f"Processamento concluído: {results['processed']} arquivos ingeridos.",
             "details": results
         }
     except Exception as e:
