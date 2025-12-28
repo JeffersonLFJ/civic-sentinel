@@ -105,13 +105,20 @@ class LawScraper:
                 
                 # Identifica se é um marcador de hierarquia
                 is_header = False
-                for level in ["TÍTULO", "CAPÍTULO", "SEÇÃO", "SUBSEÇÃO"]:
-                    if clean_part.upper().startswith(level):
-                        current_hierarchy[level.lower()] = clean_part
+                levels_map = {
+                    "TÍTULO": "titulo",
+                    "CAPÍTULO": "capitulo",
+                    "SEÇÃO": "secao",
+                    "SUBSEÇÃO": "subsecao"
+                }
+                
+                for label, key in levels_map.items():
+                    if clean_part.upper().startswith(label):
+                        current_hierarchy[key] = clean_part
                         # Limpa níveis inferiores ao mudar um superior
-                        levels = ["titulo", "capitulo", "secao", "subsecao"]
-                        idx = levels.index(level.lower())
-                        for l in levels[idx+1:]:
+                        levels_keys = ["titulo", "capitulo", "secao", "subsecao"]
+                        idx = levels_keys.index(key)
+                        for l in levels_keys[idx+1:]:
                             current_hierarchy[l] = ""
                         is_header = True
                         break

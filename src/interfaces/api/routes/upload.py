@@ -24,6 +24,7 @@ async def process_document_task(file_location: str, filename: str, source: str, 
         ocr_result = {"extracted_text": "", "ocr_method": "unknown"}
         structured_chunks = None # Specific for Laws
         
+        # --- 1. Extração Inicial (A "bagunçada") ---
         if doc_type == "lei" and filename.lower().endswith((".html", ".htm")):
             from src.ingestors.html_law import html_law_ingestor
             logger.info(f"⚖️ Ingestão: {filename} detectado como Lei.")
@@ -40,6 +41,7 @@ async def process_document_task(file_location: str, filename: str, source: str, 
             logger.info(f"📊 Ingestão: {filename} detectado como Tabela.")
             import csv
             extracted_text = ""
+            extract_method = "unknown" # Initialize extract_method
             if filename.lower().endswith(".csv"):
                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                     reader = csv.reader(f)
@@ -66,6 +68,25 @@ async def process_document_task(file_location: str, filename: str, source: str, 
         else:
             logger.info(f"🔍 Ingestão: {filename} processamento padrão (OCR/PDF).")
             ocr_result = await ocr_engine.process_document(str(file_path))
+            
+            # --- 2. Análise Semântica / Refinamento (A "distinção melhor") ---
+            text = ocr_result.get("extracted_text", "")
+            
+            if text and not structured_chunks:
+                import re
+                # A) Heurística de Correção de Quebra de Linha (PDFs "quebrados")
+                # Ex: "sis\ntema" -> "sistema" (se não houver ponto antes)
+                logger.info("Mecanismo de 'Healing': Corrigindo quebras de linha artificiais...")
+                # Remove \n se precedido de letra e seguido de letra minúscula (continuidade)
+                text = re.sub(r'(?<=[a-zA-Z0-9,])\n(?=[a-zà-ù])', ' ', text)
+                ocr_result["extracted_text"] = text
+
+                # B) Detecção de Lei em PDF
+                law_patterns = len(re.findall(r'(?:^|\n)\s*Art\.\s*\d+', text, re.IGNORECASE))
+                if law_patterns > 5:
+                    logger.info("⚖️ Detectada estrutura de LEI dentro do PDF (Hybrid Chunking).")
+                    doc_type = "lei" # Força o splitter de lei no indexador
+
         
         # Persistence Logic
         storage_path = None

@@ -109,29 +109,51 @@ class SmartTextSplitter:
 
     def split_by_paragraphs(self, text: str, max_chars: int = 1500) -> List[str]:
         """
-        Splits by double newlines, then aggregates up to max_chars.
-        Good for Reports, Plans, Minutes.
+        Smart recursive splitting trying to respect semantic boundaries.
+        Priority: Double Newline > Single Newline > Sentence End > Space.
         """
-        raw_paragraphs = re.split(r"\n\s*\n", text)
-        final_chunks = []
-        current_chunk = ""
+        separators = ["\n\n", "\n", ". ", " ", ""]
         
-        for para in raw_paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-                
-            if len(current_chunk) + len(para) + 2 <= max_chars:
-                current_chunk += "\n\n" + para if current_chunk else para
-            else:
-                if current_chunk:
-                    final_chunks.append(current_chunk)
-                current_chunk = para
-                
-        if current_chunk:
-            final_chunks.append(current_chunk)
+        def recursive_split(text: str, current_separator_idx: int) -> List[str]:
+            if len(text) <= max_chars:
+                return [text]
             
-        return final_chunks
+            if current_separator_idx >= len(separators):
+                # Fallback: Hard slice
+                return [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
+            
+            separator = separators[current_separator_idx]
+            parts = text.split(separator) if separator else list(text)
+            
+            final_chunks = []
+            current_buffer = ""
+            
+            for part in parts:
+                # Re-add separator (except for last logic usually, simplified here)
+                part_with_sep = part + separator if separator and separator != "\n\n" else part
+                
+                if len(current_buffer) + len(part_with_sep) <= max_chars:
+                    current_buffer += part_with_sep
+                else:
+                    if current_buffer:
+                        final_chunks.append(current_buffer)
+                    
+                    if len(part_with_sep) > max_chars:
+                        # Recursion on the part that is too big
+                        sub_chunks = recursive_split(part_with_sep, current_separator_idx + 1)
+                        final_chunks.extend(sub_chunks)
+                        current_buffer = ""
+                    else:
+                        current_buffer = part_with_sep
+            
+            if current_buffer:
+                final_chunks.append(current_buffer)
+                
+            return final_chunks
+
+        # Initial clean up of repeated newlines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return recursive_split(text, 0)
 
     def split_sliding_window(self, text: str, chunk_size: int = 3000, overlap: int = 500) -> List[str]:
         """
