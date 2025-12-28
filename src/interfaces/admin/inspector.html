@@ -148,59 +148,98 @@
         </div>
     </div>
 
-    <script src="inspector.js"></script>
+    <script src="app.js?v=4"></script>
     <script>
-        // Shared UI Logic for Inspector Page
-        const logsModal = document.getElementById('logsModal');
-        const logsContainer = document.getElementById('logsContainer');
-        const auditoriaModal = document.getElementById('auditoriaModal');
-        const auditTableBody = document.getElementById('auditTableBody');
+        // Shared UI Logic for Inspector Page is now handled by app.js
+        // We only keep fetchAuditoria if it's not in app.js or slightly different.
+        // Actually app.js already has fetchAuditoria, so we can likely remove this duplication.
 
-        function openLogs() {
-            logsModal.classList.remove('hidden');
-            logsModal.style.display = 'flex';
-            fetch('/api/admin/logs?lines=200').then(r => r.json()).then(d => {
-                logsContainer.innerHTML = d.logs ? d.logs.join('<br>') : 'Sem logs.';
-                logsContainer.scrollTop = logsContainer.scrollHeight;
-            });
-        }
-        function closeLogs() {
-            logsModal.classList.add('hidden');
-            logsModal.style.display = 'none';
-        }
+        // Inspector Specific Logic
+        const docList = document.getElementById('docList');
+        const chunkViewer = document.getElementById('chunkViewer');
 
-        function openAuditoriaModal() {
-            auditoriaModal.classList.remove('hidden');
-            auditoriaModal.style.display = 'flex';
-            fetchAuditoria();
-        }
-        function closeAuditoria() {
-            auditoriaModal.classList.add('hidden');
-            auditoriaModal.style.display = 'none';
-        }
-
-        async function fetchAuditoria() {
-            auditTableBody.innerHTML = '<tr><td colspan="4">Carregando auditoria...</td></tr>';
+        async function initInspector() {
             try {
-                const res = await fetch('/api/admin/stats');
-                const data = await res.json();
-                const logs = data.audit_logs || [];
-                if (logs.length === 0) {
-                    auditTableBody.innerHTML = '<tr><td colspan="4">Nenhum log de auditoria encontrado.</td></tr>';
+                console.log("Iniciando Inspetor...");
+                const res = await fetch('/api/documents/?limit=100');
+                const responseData = await res.json();
+
+                // Handle both array directly or {data: []}
+                const docs = Array.isArray(responseData) ? responseData : (responseData.data || []);
+
+                if (docs.length === 0) {
+                    docList.innerHTML = '<p style="color:#64748b; padding: 10px;">Nenhum documento encontrado.</p>';
                     return;
                 }
-                auditTableBody.innerHTML = logs.map(log => `
-                    <tr>
-                        <td style="padding:10px; border-bottom:1px solid #1e293b;">${new Date(log.timestamp).toLocaleString()}</td>
-                        <td style="padding:10px; border-bottom:1px solid #1e293b;"><span style="color:#a5b4fc">${log.action}</span></td>
-                        <td style="padding:10px; border-bottom:1px solid #1e293b; font-size:0.85rem">${log.details}</td>
-                        <td style="padding:10px; border-bottom:1px solid #1e293b; color:#22c55e">${log.confidence_score ? (log.confidence_score * 100).toFixed(0) + '%' : 'N/A'}</td>
-                    </tr>
+
+                docList.innerHTML = docs.map(doc => `
+                    <div class="doc-item" onclick="inspectDoc('${doc.id}', this)">
+                        <div style="font-weight:600; color:#e2e8f0;">${doc.filename}</div>
+                        <div style="font-size:0.8rem; color:#94a3b8;">${doc.source} • ${doc.ocr_method || 'N/A'}</div>
+                    </div>
                 `).join('');
+
             } catch (e) {
-                auditTableBody.innerHTML = `<tr><td colspan="4" style="color:red">Erro: ${e.message}</td></tr>`;
+                docList.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
             }
         }
+
+        async function inspectDoc(id, el) {
+            // Highlight active
+            document.querySelectorAll('.doc-item').forEach(e => e.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            chunkViewer.innerHTML = '<div style="text-align:center; color:#94a3b8; margin-top:20px;">Carregando chunks do ChromaDB...</div>';
+
+            try {
+                const res = await fetch(`/api/admin/inspect/${id}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    chunkViewer.innerHTML = `<div style="color:red; padding:20px;">Erro: ${data.error}</div>`;
+                    return;
+                }
+
+                if (!data.chunks || data.chunks.length === 0) {
+                    chunkViewer.innerHTML = `<div style="padding:20px;">Nenhum chunk encontrado para este documento. (Pode estar processando ou falhou na indexação)</div>`;
+                    return;
+                }
+
+                chunkViewer.innerHTML = `
+                    <div style="margin-bottom:15px; border-bottom:1px solid #334155; padding-bottom:10px;">
+                        <h3 style="color:#818cf8;">${data.doc_id}</h3>
+                        <span style="font-size:0.9rem; color:#94a3b8;">Total Chunks: ${data.total_chunks}</span>
+                    </div>
+                    ` + data.chunks.map(chunk => `
+                    <div class="chunk-card">
+                        <div class="chunk-meta">
+                            <span>Index: ${chunk.chunk_index}</span>
+                            <span>Size: ${chunk.full_length} chars</span>
+                        </div>
+                        <div class="chunk-text">${escapeHtml(chunk.content)}</div>
+                        <div style="margin-top:10px; font-size:0.75rem; color:#64748b; border-top:1px dashed #334155; padding-top:5px;">
+                            Metadata: ${JSON.stringify(chunk.metadata)}
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                chunkViewer.innerHTML = `<div style="color:red; padding:20px;">Erro de conexão: ${e.message}</div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Init
+        initInspector();
+
     </script>
 </body>
 

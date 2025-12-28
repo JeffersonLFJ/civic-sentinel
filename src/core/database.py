@@ -2,7 +2,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 import aiosqlite
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from src.config import settings
 
 # Logger setup
@@ -102,6 +102,11 @@ class DatabaseManager:
             except Exception:
                 pass
 
+            try:
+                await cursor.execute("ALTER TABLE documents ADD COLUMN doc_type TEXT")
+            except Exception:
+                pass
+
             await self._sqlite_connection.commit()
 
     async def register_user_if_not_exists(self, user_hash: str):
@@ -132,6 +137,7 @@ class DatabaseManager:
         async with self._sqlite_connection.execute(query, (log_id, action, details, user_hash, confidence_score)) as cursor:
             await self._sqlite_connection.commit()
             return log_id
+    async def save_document_record(self, doc_data: Dict[str, Any]):
         """
         Saves document metadata and content.
         """
@@ -143,9 +149,9 @@ class DatabaseManager:
         
         query = """
         INSERT INTO documents (
-            id, filename, source, storage_path, text_content, ocr_method, url, publication_date
+            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         params = (
@@ -156,16 +162,48 @@ class DatabaseManager:
             doc_data["text_content"],
             doc_data["ocr_method"],
             doc_data.get("url"),
-            doc_data.get("publication_date")
+            doc_data.get("publication_date"),
+            doc_data.get("doc_type", "generico")
         )
         
         async with self._sqlite_connection.execute(query, params) as cursor:
             await self._sqlite_connection.commit()
             return doc_id
+    async def index_pre_chunked_data(self, doc_id: str, chunks: List[Dict], base_metadata: dict):
+        """
+        Indexes pre-calculated chunks (e.g. from HtmlLawIngestor) directly into ChromaDB.
+        """
+        collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+            
+        ids = []
+        documents = []
+        metadatas = []
+        
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc_id}_chunk_{i}"
+            
+            # Merit metadata
+            meta = base_metadata.copy()
+            meta.update(chunk.get("metadata", {}))
+            meta["original_doc_id"] = doc_id # Consolidated key for inspector
+            meta["chunk_index"] = i
+            
+            ids.append(chunk_id)
+            documents.append(chunk["text"])
+            metadatas.append(meta)
+            
+        if ids:
+            collection.add(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
+            logger.info(f"Indexed {len(ids)} structured chunks for {doc_id}")
 
     async def index_document_text(self, doc_id: str, text: str, metadata: dict):
         """
-        Indexes document text into ChromaDB using SmartTextSplitter.
+        Standard indexing for raw text (OCR or plain text).
+        Splits text into chunks and saves to ChromaDB.
         """
         if not text:
             return
@@ -261,17 +299,23 @@ class DatabaseManager:
                 # This is expensive but necessary if metadata wasn't set on old docs
                 return {"error": "No chunks found with metadata match."}
 
+            # Sort by chunk_index to ensure logical order in UI
+            combined = sorted(
+                zip(results["documents"], results["metadatas"]),
+                key=lambda x: x[1].get("chunk_index") if x[1].get("chunk_index") is not None else -1
+            )
+
             return {
                 "doc_id": doc_id,
                 "total_chunks": len(results["ids"]),
                 "chunks": [
                     {
                         "chunk_index": m.get("chunk_index"),
-                        "content": d[:1000] + "..." if len(d) > 1000 else d, # Preview first 1000 chars
+                        "content": d, # Return full content for deep inspection
                         "full_length": len(d),
                         "metadata": m
                     }
-                    for d, m in zip(results["documents"], results["metadatas"])
+                    for d, m in combined
                 ]
             }
         except Exception as e:
@@ -367,15 +411,19 @@ class DatabaseManager:
         # I'll implement a 'get' loop to find IDs starting with.
         
         collection = self.chroma_client.get_or_create_collection("sentinela_documents")
-        # Find IDs
-        # We can peek? No.
-        # We can't regex search IDs in Chroma.
-        # This is a limitation of current implementation.
-        # I will leave a TODO and just remove from SQLite for UI View.
-        # BUT user wants clean up.
-        # I will assume max 500 chunks and try to delete them by ID list?
-        potential_ids = [f"{doc_id}_{i}" for i in range(500)]
-        collection.delete(ids=potential_ids)
+        
+        # Deleta usando o filtro de metadados original_doc_id (mais robusto)
+        try:
+            collection.delete(where={"original_doc_id": doc_id})
+            logger.info(f"Todos os vetores do documento {doc_id} foram removidos do ChromaDB.")
+        except Exception as e:
+            logger.error(f"Erro ao deletar vetores do ChromaDB: {e}")
+            # Tentativa de fallback por prefixo de ID (caso o metadado tenha falhado no passado)
+            # Como não sabemos o total, tentamos um range maior, mas o 'where' é o oficial agora.
+            potential_ids = [f"{doc_id}_{i}" for i in range(2000)]
+            collection.delete(ids=potential_ids)
+            potential_ids_chunk = [f"{doc_id}_chunk_{i}" for i in range(2000)]
+            collection.delete(ids=potential_ids_chunk)
         
         return True
 

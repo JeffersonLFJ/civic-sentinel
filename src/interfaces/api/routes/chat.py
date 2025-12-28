@@ -40,7 +40,11 @@ async def chat_endpoint(request: ChatRequest):
                 meta = doc["metadata"]
                 source_info = f"Fonte: {meta.get('filename')} ({meta.get('source')})"
                 context_str += f"\n[Documento {i+1}] {source_info}\nConteúdo: {doc['content']}\n"
-                citation_metadata.append(meta)
+                
+                # Prepara metadados para o frontend incluir o conteúdo no modal
+                cite = meta.copy()
+                cite["content"] = doc["content"]
+                citation_metadata.append(cite)
         else:
             # Força o modelo a ver que não há nada, seguindo o novo protocolo bioético
             context_str = "CONTEXTO RECUPERADO:\n[SISTEMA: NENHUM DOCUMENTO ENCONTRADO NO BANCO DE DADOS LOCAL]\n"

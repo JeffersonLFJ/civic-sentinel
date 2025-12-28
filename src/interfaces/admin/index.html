@@ -60,6 +60,7 @@
                         <tr>
                             <th>Arquivo</th>
                             <th>Fonte</th>
+                            <th>Tipo</th>
                             <th>Data Publicação</th>
                             <th>Status (OCR)</th>
                             <th>Ações</th>
@@ -76,6 +77,17 @@
         <div id="uploadModal" class="modal hidden">
             <div class="modal-content">
                 <h3>Upload de Documento</h3>
+
+                <label class="block text-sm font-medium mb-1 text-gray-300"
+                    style="text-align: left; display: block; margin-bottom: 5px;">Tipo de Documento</label>
+                <select id="docType"
+                    style="width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 15px; outline: none;">
+                    <option value="lei">Lei / Legislação (HTML)</option>
+                    <option value="denuncia">Documentos (Imagens e PDF)</option>
+                    <option value="diario">Diário Oficial</option>
+                    <option value="tabela">Planilhas / Tabelas (Excel e CSV)</option>
+                </select>
+
                 <div class="file-drop-area">
                     <span class="file-msg">Arraste ou clique aqui</span>
                     <input class="file-input" type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.txt,.html"
@@ -171,7 +183,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>

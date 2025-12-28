@@ -95,31 +95,36 @@ const progressText = document.getElementById('progressText');
 const closeLoadingBtn = document.getElementById('closeLoadingBtn');
 let logInterval = null;
 
-function startLogPolling() {
+function startLogPolling(filterText = "") {
     miniLogContent.innerHTML = 'Conectando aos logs...';
     progressBar.style.width = '5%';
     progressText.innerText = '5%';
 
+    // Clear previous logs to show only current operation
+    miniLogContent.innerHTML = "";
+
     logInterval = setInterval(async () => {
         try {
-            const res = await fetch('/api/admin/logs?lines=50');
+            const res = await fetch('/api/admin/logs?lines=200');
             const data = await res.json();
             if (data.logs) {
-                miniLogContent.innerHTML = data.logs.join('<br>');
+                // Filter logs by filename (filterText)
+                const filtered = filterText
+                    ? data.logs.filter(line => line.includes(filterText) || line.includes("📊") || line.includes("🎉"))
+                    : data.logs;
+
+                miniLogContent.innerHTML = filtered.join('<br>');
                 miniLogContent.scrollTop = miniLogContent.scrollHeight;
 
-                // Simple parser for progress based on keywords added in upload.py
                 const logsJoined = data.logs.join(' ');
                 if (logsJoined.includes('🎉 Indexação concluída')) {
                     updateProgress(100);
                     showCloseButton();
                 } else if (logsJoined.includes('📊 Progresso de indexação: Lote')) {
-                    // Extract X/Y from "Lote X/Y"
                     const match = logsJoined.match(/Lote (\d+)\/(\d+)/);
                     if (match) {
                         const current = parseInt(match[1]);
                         const total = parseInt(match[2]);
-                        // Scale 80% to 99% based on batches
                         const prog = 80 + Math.floor((current / total) * 19);
                         updateProgress(prog);
                     } else {
@@ -155,7 +160,15 @@ function updateProgress(val) {
 function showCloseButton() {
     stopLogPolling();
     closeLoadingBtn.style.display = 'block';
-    loadingSubtext.innerText = "Processamento concluído com sucesso!";
+    loadingSubtext.innerHTML = '<span style="color: #22c55e; font-weight: bold;">✅ Processamento concluído com sucesso!</span>';
+
+    // Auto-close after 3 seconds
+    setTimeout(() => {
+        if (!loadingOverlay.classList.contains('hidden')) {
+            hideLoading();
+            fetchDocuments();
+        }
+    }, 3000);
 }
 
 function showLoading(title, sub) {
@@ -236,11 +249,14 @@ document.getElementById('confirmUpload').addEventListener('click', async () => {
     document.getElementById('uploadModal').style.display = 'none';
 
     showLoading("Enviando arquivo...", "O Sentinela está recebendo seu documento.");
-    startLogPolling();
+    startLogPolling(file.name);
+
+    const docType = document.getElementById('docType').value;
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("source", "admin");
+    formData.append("doc_type", docType);
 
     try {
         await fetch(UPLOAD_URL, {
@@ -263,7 +279,7 @@ function closeModal() {
 // Logic
 async function fetchDocuments() {
     try {
-        docsTableBody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+        if (docsTableBody) docsTableBody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
 
         // Parallel Fetch: Docs and Stats
         const [docsRes, statsRes] = await Promise.all([
@@ -277,7 +293,7 @@ async function fetchDocuments() {
         renderTable(docs);
 
         // Render Stats
-        totalDocsEl.textContent = stats.total_documents;
+        if (totalDocsEl) totalDocsEl.textContent = stats.total_documents;
 
         // Update other cards if IDs existed (Added dynamically if needed or just logged)
         // I will assume simple update for now.
@@ -289,6 +305,7 @@ async function fetchDocuments() {
 }
 
 function renderTable(docs) {
+    if (!docsTableBody) return;
     docsTableBody.innerHTML = '';
 
     if (docs.length === 0) {
@@ -307,6 +324,7 @@ function renderTable(docs) {
         row.innerHTML = `
             <td>${doc.filename}</td>
             <td><span style="font-size:0.8rem; padding:2px 6px; background:#334155; border-radius:4px;">${source}</span></td>
+            <td><span style="font-size:0.8rem; color:#a5b4fc;">${doc.doc_type || '-'}</span></td>
             <td>${date}</td>
             <td>${doc.ocr_method || 'N/A'}</td>
             <td>
