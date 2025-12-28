@@ -137,6 +137,18 @@ class DatabaseManager:
         async with self._sqlite_connection.execute(query, (log_id, action, details, user_hash, confidence_score)) as cursor:
             await self._sqlite_connection.commit()
             return log_id
+            
+    async def clear_audit_logs(self):
+        """
+        Clears all records from audit_logs table.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        async with self._sqlite_connection.execute("DELETE FROM audit_logs") as cursor:
+            await self._sqlite_connection.commit()
+            return cursor.rowcount
+
     async def save_document_record(self, doc_data: Dict[str, Any]):
         """
         Saves document metadata and content.

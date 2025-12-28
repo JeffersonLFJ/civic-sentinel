@@ -47,6 +47,17 @@ async def get_system_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/audit")
+async def clear_audit_logs():
+    """
+    Clears all audit logs.
+    """
+    try:
+        count = await db_manager.clear_audit_logs()
+        return {"status": "success", "message": f"Removidos {count} logs de auditoria."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Prompt Editor ---
 PROMPT_FILE = settings.BASE_DIR / "sentinela_prompt_v2.md"
 

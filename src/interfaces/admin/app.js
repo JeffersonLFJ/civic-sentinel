@@ -41,7 +41,41 @@ const auditTableBody = document.getElementById('auditTableBody');
 function openAuditoriaModal() {
     auditoriaModal.classList.remove('hidden');
     auditoriaModal.style.display = 'flex';
+
+    // Inject Cleanup Button if not exists
+    const headerDiv = auditoriaModal.querySelector('div[style*="justify-content: space-between"]');
+    if (headerDiv && !document.getElementById('cleanAuditBtn')) {
+        const btn = document.createElement('button');
+        btn.id = 'cleanAuditBtn';
+        btn.className = 'btn danger-sm';
+        btn.innerText = '🗑️ Limpar Dados';
+        btn.style.marginRight = '10px';
+        btn.style.marginLeft = 'auto'; // push to right
+        btn.onclick = clearAuditLogs;
+
+        // Insert before Close button
+        const closeBtn = headerDiv.querySelector('button.secondary');
+        headerDiv.insertBefore(btn, closeBtn);
+    }
+
     fetchAuditoria();
+}
+
+async function clearAuditLogs() {
+    if (!confirm("Tem certeza que deseja apagar TODO o histórico de auditoria?")) return;
+
+    try {
+        const res = await fetch('/api/admin/audit', { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+            alert(data.message);
+            fetchAuditoria();
+        } else {
+            alert("Erro: " + data.detail);
+        }
+    } catch (e) {
+        alert("Erro de conexão: " + e.message);
+    }
 }
 
 function closeAuditoria() {
