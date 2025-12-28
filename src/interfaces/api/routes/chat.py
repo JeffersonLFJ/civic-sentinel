@@ -76,12 +76,20 @@ async def chat_endpoint(request: ChatRequest):
         
         # 5. Log Audit
         citation_names = ", ".join([m.get("filename", "unknown") for m in citation_metadata])
-        prompt_version = "sentinela_prompt_v2" # Match filename used in admin.py
+        prompt_version = "sentinela_prompt_v2" 
+        
+        # Calculate Confidence based on RAG retrieval scores
+        rag_confidence = 0.0
+        if context_docs:
+            scores = [d.get("score", 0) for d in context_docs]
+            if scores:
+                rag_confidence = sum(scores) / len(scores)
+        
         await db_manager.log_audit(
             action="chat_rag",
             details=f"Query: {request.message[:50]}... | Citations: {citation_names} | Prompt: {prompt_version}",
             user_hash=user_hash,
-            confidence_score=0.9 # Default for gemma responses with context
+            confidence_score=rag_confidence
         )
         
         return {
