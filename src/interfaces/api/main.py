@@ -46,6 +46,11 @@ async def startup_event():
     # Check DB
     _ = db_manager.chroma_client
     await db_manager.get_sqlite()
+    
+    # Background Maintenance
+    import asyncio
+    from src.utils.maintenance import cleanup_stale_uploads
+    asyncio.create_task(cleanup_stale_uploads())
 
 @app.get("/", include_in_schema=False)
 async def root():

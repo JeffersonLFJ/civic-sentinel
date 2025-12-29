@@ -33,8 +33,8 @@ async def get_system_stats():
             last_entry = await cursor.fetchone()
             last_ingestion = last_entry[0] if last_entry else "N/A"
             
-            # 4. Audit Logs (New)
-            await cursor.execute("SELECT timestamp, action, details, confidence_score FROM audit_logs ORDER BY timestamp DESC LIMIT 10")
+            # 4. Audit Logs (Expanded)
+            await cursor.execute("SELECT id, timestamp, action, query, confidence_score FROM audit_logs ORDER BY timestamp DESC LIMIT 50")
             audit_logs = [dict(row) for row in await cursor.fetchall()]
 
         return {
@@ -44,6 +44,23 @@ async def get_system_stats():
             "audit_logs": audit_logs,
             "system_health": "Healthy"
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/audit/{log_id}")
+async def get_audit_detail(log_id: str):
+    """
+    Returns full detail of an interaction for the Raio-X view.
+    """
+    try:
+        if not db_manager._sqlite_connection:
+            await db_manager.get_sqlite()
+            
+        async with db_manager._sqlite_connection.execute("SELECT * FROM audit_logs WHERE id = ?", (log_id,)) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Log not found")
+            return dict(row)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

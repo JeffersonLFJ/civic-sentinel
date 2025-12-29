@@ -74,22 +74,32 @@ async def chat_endpoint(request: ChatRequest):
             images=request.images
         )
         
-        # 5. Log Audit
+        # 5. Log Audit (Structured for Raio-X)
         citation_names = ", ".join([m.get("filename", "unknown") for m in citation_metadata])
         prompt_version = "sentinela_prompt_v2" 
         
-        # Calculate Confidence based on RAG retrieval scores
+        # Calculate Calibrated Confidence
+        # Using a more balanced linear curve: min(1.0, avg_score * 1.25)
+        # This prevents low confidence reports for decent retrieval (e.g. 0.6 -> 75%)
         rag_confidence = 0.0
         if context_docs:
             scores = [d.get("score", 0) for d in context_docs]
             if scores:
-                rag_confidence = sum(scores) / len(scores)
+                avg_score = sum(scores) / len(scores)
+                rag_confidence = min(1.0, round(avg_score * 1.25, 2))
+        
+        # Structure sources for JSON storage
+        import json
+        sources_json = json.dumps(citation_metadata)
         
         await db_manager.log_audit(
             action="chat_rag",
-            details=f"Query: {request.message[:50]}... | Citations: {citation_names} | Prompt: {prompt_version}",
             user_hash=user_hash,
-            confidence_score=rag_confidence
+            query_text=request.message,
+            response_text=response["content"],
+            sources_json=sources_json,
+            confidence_score=rag_confidence,
+            details=f"Citations: {citation_names} | Prompt: {prompt_version}"
         )
         
         return {

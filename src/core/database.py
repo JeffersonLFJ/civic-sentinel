@@ -59,7 +59,10 @@ class DatabaseManager:
             action TEXT NOT NULL,
             details TEXT,
             user_hash TEXT NOT NULL,
-            confidence_score REAL
+            confidence_score REAL,
+            query TEXT,
+            response TEXT,
+            sources_json TEXT
         );
         """
         
@@ -103,7 +106,17 @@ class DatabaseManager:
                 pass
 
             try:
-                await cursor.execute("ALTER TABLE documents ADD COLUMN doc_type TEXT")
+                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN query TEXT")
+            except Exception:
+                pass
+
+            try:
+                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN response TEXT")
+            except Exception:
+                pass
+
+            try:
+                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN sources_json TEXT")
             except Exception:
                 pass
 
@@ -120,9 +133,9 @@ class DatabaseManager:
             "INSERT OR IGNORE INTO users (id) VALUES (?)", (user_hash,)
         ) as cursor:
             await self._sqlite_connection.commit()
-    async def log_audit(self, action: str, details: str, user_hash: str, confidence_score: float = None):
+    async def log_audit(self, action: str, user_hash: str, details: str = None, query_text: str = None, response_text: str = None, sources_json: str = None, confidence_score: float = None):
         """
-        Logs an action to the audit trail.
+        Logs an action to the audit trail with support for detailed RAG inspection.
         """
         if not self._sqlite_connection:
             await self.get_sqlite()
@@ -130,11 +143,13 @@ class DatabaseManager:
         import uuid
         log_id = str(uuid.uuid4())
         
-        query = """
-        INSERT INTO audit_logs (id, action, details, user_hash, confidence_score)
-        VALUES (?, ?, ?, ?, ?)
+        sql = """
+        INSERT INTO audit_logs (id, action, details, user_hash, confidence_score, query, response, sources_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        async with self._sqlite_connection.execute(query, (log_id, action, details, user_hash, confidence_score)) as cursor:
+        params = (log_id, action, details, user_hash, confidence_score, query_text, response_text, sources_json)
+        
+        async with self._sqlite_connection.execute(sql, params) as cursor:
             await self._sqlite_connection.commit()
             return log_id
             

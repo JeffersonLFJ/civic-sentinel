@@ -34,32 +34,27 @@ async function fetchLogs() {
     }
 }
 
-// Auditoria
-const auditoriaModal = document.getElementById('auditoriaModal');
-const auditTableBody = document.getElementById('auditTableBody');
+// Navegação entre Seções (Página Inteira)
+function showSection(sectionId) {
+    document.getElementById('docsSection').classList.add('hidden');
+    document.getElementById('auditSection').classList.add('hidden');
+    document.getElementById('docsNav').classList.remove('active');
+    document.getElementById('auditNav').classList.remove('active');
 
-function openAuditoriaModal() {
-    auditoriaModal.classList.remove('hidden');
-    auditoriaModal.style.display = 'flex';
-
-    // Inject Cleanup Button if not exists
-    const headerDiv = auditoriaModal.querySelector('div[style*="justify-content: space-between"]');
-    if (headerDiv && !document.getElementById('cleanAuditBtn')) {
-        const btn = document.createElement('button');
-        btn.id = 'cleanAuditBtn';
-        btn.className = 'btn danger-sm';
-        btn.innerText = '🗑️ Limpar Dados';
-        btn.style.marginRight = '10px';
-        btn.style.marginLeft = 'auto'; // push to right
-        btn.onclick = clearAuditLogs;
-
-        // Insert before Close button
-        const closeBtn = headerDiv.querySelector('button.secondary');
-        headerDiv.insertBefore(btn, closeBtn);
+    if (sectionId === 'docs') {
+        document.getElementById('docsSection').classList.remove('hidden');
+        document.getElementById('docsNav').classList.add('active');
+        fetchDocuments();
+    } else if (sectionId === 'audit') {
+        document.getElementById('auditSection').classList.remove('hidden');
+        document.getElementById('auditNav').classList.add('active');
+        fetchAuditoria();
     }
-
-    fetchAuditoria();
 }
+window.showSection = showSection;
+
+// Auditoria
+const auditTableBody = document.getElementById('auditTableBody');
 
 async function clearAuditLogs() {
     if (!confirm("Tem certeza que deseja apagar TODO o histórico de auditoria?")) return;
@@ -78,35 +73,92 @@ async function clearAuditLogs() {
     }
 }
 
-function closeAuditoria() {
-    auditoriaModal.classList.add('hidden');
-    auditoriaModal.style.display = 'none';
-}
-
 async function fetchAuditoria() {
-    auditTableBody.innerHTML = '<tr><td colspan="4">Carregando auditoria...</td></tr>';
+    auditTableBody.innerHTML = '<tr><td colspan="3">Carregando auditoria...</td></tr>';
     try {
         const res = await fetch('/api/admin/stats');
         const data = await res.json();
         const logs = data.audit_logs || [];
 
         if (logs.length === 0) {
-            auditTableBody.innerHTML = '<tr><td colspan="4">Nenhum log de auditoria encontrado.</td></tr>';
+            auditTableBody.innerHTML = '<tr><td colspan="3">Nenhum log de auditoria encontrado.</td></tr>';
             return;
         }
 
-        auditTableBody.innerHTML = logs.map(log => `
-            <tr>
-                <td style="padding:10px; border-bottom:1px solid #1e293b;">${new Date(log.timestamp).toLocaleString()}</td>
-                <td style="padding:10px; border-bottom:1px solid #1e293b;"><span style="color:#a5b4fc">${log.action}</span></td>
-                <td style="padding:10px; border-bottom:1px solid #1e293b; font-size:0.85rem">${log.details}</td>
-                <td style="padding:10px; border-bottom:1px solid #1e293b; color:#22c55e">${log.confidence_score ? (log.confidence_score * 100).toFixed(0) + '%' : 'N/A'}</td>
-            </tr>
-        `).join('');
+        auditTableBody.innerHTML = logs.map(log => {
+            const date = new Date(log.timestamp).toLocaleString();
+            const queryPreview = log.query ? log.query.substring(0, 60) + "..." : "<i>Ação: " + log.action + "</i>";
+
+            let badgeClass = 'badge-low';
+            if (log.confidence_score >= 0.7) badgeClass = 'badge-high';
+            else if (log.confidence_score >= 0.4) badgeClass = 'badge-mid';
+
+            return `
+                <tr onclick="openInspector('${log.id}')">
+                    <td style="padding:10px; border-bottom:1px solid #1e293b; font-size:0.8rem;">${date}</td>
+                    <td style="padding:10px; border-bottom:1px solid #1e293b;">${queryPreview}</td>
+                    <td style="padding:10px; border-bottom:1px solid #1e293b;">
+                        <span class="confidence-badge ${badgeClass}">${(log.confidence_score * 100).toFixed(0)}%</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     } catch (e) {
-        auditTableBody.innerHTML = `<tr><td colspan="4" style="color:red">Erro: ${e.message}</td></tr>`;
+        auditTableBody.innerHTML = `<tr><td colspan="3" style="color:red">Erro: ${e.message}</td></tr>`;
     }
 }
+
+async function openInspector(logId) {
+    const inspectorContent = document.getElementById('inspectorContent');
+    inspectorContent.innerHTML = '<div style="text-align:center; padding:40px;"><div class="spinner"></div><p>Analisando rastros...</p></div>';
+
+    try {
+        const res = await fetch(`/api/admin/audit/${logId}`);
+        const log = await res.json();
+
+        // Parse sources if present
+        let sourcesHtml = '<p style="color:#94a3b8;">Nenhuma fonte documental citada.</p>';
+        if (log.sources_json) {
+            const sources = JSON.parse(log.sources_json);
+            sourcesHtml = sources.map((s, idx) => `
+                <div class="chunk-card">
+                    <div style="font-weight:600; color:#3b82f6; margin-bottom:5px; font-size:0.75rem;">
+                        FRAGMENTO ${idx + 1}: ${s.filename} (${s.source})
+                    </div>
+                    ${s.content}
+                </div>
+            `).join('');
+        }
+
+        inspectorContent.innerHTML = `
+            <div class="inspector-card">
+                <h5>Pergunta do Usuário</h5>
+                <p style="font-size:1.1rem; font-weight:600;">"${log.query || '(sem pergunta)'}"</p>
+            </div>
+
+            <div class="inspector-card" style="border-left: 4px solid #22c55e;">
+                <h5>Resposta do Sentinela</h5>
+                <p style="white-space: pre-wrap;">${log.response || '(sem resposta)'}</p>
+            </div>
+
+            <div class="inspector-card">
+                <h5>Base de Conhecimento RAG (Citações)</h5>
+                ${sourcesHtml}
+            </div>
+
+            <div class="inspector-card" style="font-size:0.8rem; color:#94a3b8;">
+                <p>ID da Operação: ${log.id}</p>
+                <p>Ação: ${log.action}</p>
+                <p>Confiança Bruta: ${log.confidence_score}</p>
+            </div>
+        `;
+    } catch (e) {
+        inspectorContent.innerHTML = `<div style="color:red; padding:20px;">Erro ao carregar detalhes: ${e.message}</div>`;
+    }
+}
+window.openInspector = openInspector;
+window.fetchAuditoria = fetchAuditoria;
+window.clearAuditLogs = clearAuditLogs;
 
 
 // Prompt Editor Logic
