@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from src.core.llm_client import llm_client
 
 class BioethicsFilter:

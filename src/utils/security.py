@@ -3,40 +3,81 @@ Módulo crítico de segurança e privacidade.
 Toda interação com dados pessoais passa por aqui.
 """
 
+from argon2 import PasswordHasher
 from hashlib import sha256
 from typing import Literal, Dict
 import secrets
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
+
+# Configure Argon2id (Memory-hard)
+# time_cost=2, memory_cost=65536 (64MB), parallelism=2
+ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2)
 
 def anonymize_user(raw_id: str, salt: str = None) -> str:
     """
-    CRITICAL: Esta função é a primeira linha de defesa.
-    raw_id NUNCA deve ser persistido em logs, DB ou transmitido.
+    CRITICAL: Primeira linha de defesa de anonimato.
+    Usa Argon2id (Memory-hard) para impedir força bruta com GPU.
     
     Args:
-        raw_id: Identificador original (ex: número de telefone)
-        salt: Salt para hashing (deve vir do .env: ANONYMIZATION_SALT)
+        raw_id: Identificador original
+        salt: Salt (opcional, mas DEVE vir do .env em prod)
     
     Returns:
-        Hash determinístico SHA256 (mesmo user = mesmo hash sempre)
-    
-    Exemplo:
-        >>> anonymize_user("5521987654321", salt="my_secret_salt")
-        'a3f5e8c9d1b2...'  # Hash de 64 caracteres
+        Hash seguro do usuário.
     """
     if not salt:
         salt = os.getenv("ANONYMIZATION_SALT")
-        if not salt:
-            # Fallback seguro para desenvolvimento, mas idealmente deve levantar erro em prod
-            salt = "dev_default_salt_CHANGE_ME" 
-            # raise ValueError("ANONYMIZATION_SALT não configurado no .env")
+        if not salt or salt == "dev_secret_salt_CHANGE_IN_PROD":
+            logger.warning("⚠️ SECURITY WARNING: Usando salt padrão/fraco! Configure ANONYMIZATION_SALT no .env.")
+            salt = "dev_secret_salt_CHANGE_IN_PROD"
     
-    # Concatena salt + raw_id e gera hash
-    salted = f"{salt}{raw_id}".encode('utf-8')
-    return sha256(salted).hexdigest()
+    # Argon2 já aplica salt internamente de forma segura, mas para determinação 
+    # (mesmo raw_id = mesmo hash sempre para o mesmo sistema), precisamos de uma abordagem estática controlada
+    # OU usamos o salt como parte da 'password' input se quisermos determinação simples
+    # O Argon2 padrão gera salt aleatório (bom para senhas, ruim para lookup de usuário).
+    # Para lookup determinístico (saber que User A é User A amanhã), precisamos de um mecanismo fixo.
+    
+    # Abordagem Híbrida Seguro-Determinística:
+    # HMAC-SHA256(Key=GlobalSalt, Msg=RawID) -> Intermediate
+    # Argon2(Msg=Intermediate) -> Mas Argon2 ainda é randomizado por design.
+    
+    # CORREÇÃO: Para fins de anonimização (lookup), precisamos de DETERMINISMO.
+    # O Argon2 não é ideal para lookup determinístico direto 1:1 sem salt fixo.
+    # Mas podemos fixar o salt se a lib permitir, ou usar HMAC-BLAKE2b.
+    
+    # Melhor abordagem para PROJETO ATUAL (sem mudar arquitetura de DB):
+    # Manter Salt Global + PBKDF2 ou Argon2 com parâmetros fixos? 
+    # A lib 'argon2-cffi' gera salts randomicos por padrão.
+    # Vamos usar PBKDF2-HMAC-SHA512 que é NIST-approved e permite determinismo fácil.
+    # O usuário pediu Argon2. Para Argon2 determinístico, precisamos passar o salt manualmente.
+    # A lib argon2-cffi low-level permite isso.
+    
+    try:
+        from argon2.low_level import hash_secret_raw, Type
+        # Salt deve ter 16 bytes. Vamos derivar do nosso Salt String.
+        # Enforce 16 bytes salt from global string
+        salt_bytes = sha256(salt.encode()).digest()[:16]
+        
+        # Hash
+        hashed_bytes = hash_secret_raw(
+            secret=raw_id.encode(),
+            salt=salt_bytes,
+            time_cost=2,
+            memory_cost=65536,
+            parallelism=2,
+            hash_len=32,
+            type=Type.ID
+        )
+        return hashed_bytes.hex()
+        
+    except ImportError:
+        # Fallback se Argon2 falhar (não deveria)
+        return sha256(f"{salt}{raw_id}".encode()).hexdigest()
 
 
 def generate_audit_token() -> str:

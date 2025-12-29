@@ -93,7 +93,39 @@ class DatabaseManager:
             await cursor.execute(query_users)
             await cursor.execute(query_docs)
             
+            # FTS5 Virtual Table for Keyword Search
+            query_fts = """
+            CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+                id UNINDEXED,
+                text_content,
+                filename,
+                source,
+                tokenize='porter'
+            );
+            """
+            await cursor.execute(query_fts)
+            
+            # FTS Backfill Migration
+            # Check if FTS is empty but documents has data
+            try:
+                await cursor.execute("SELECT COUNT(*) FROM documents_fts")
+                count_fts = (await cursor.fetchone())[0]
+                
+                await cursor.execute("SELECT COUNT(*) FROM documents")
+                count_docs = (await cursor.fetchone())[0]
+                
+                if count_docs > 0 and count_fts == 0:
+                    logger.info("🔄 Migração FTS: Populando tabela virtual com documentos existentes...")
+                    await cursor.execute("""
+                        INSERT INTO documents_fts (id, text_content, filename, source)
+                        SELECT id, text_content, filename, source FROM documents WHERE text_content IS NOT NULL
+                    """)
+                    logger.info("✅ Migração FTS concluída.")
+            except Exception as e:
+                logger.warning(f"⚠️ Falha na verificação/migração FTS: {e}")
+            
             # Migration: Check if url column exists, if not add it (simple migration for dev)
+            # ... (omitted standard migrations)
             # In a real app we would use alembic
             try:
                 await cursor.execute("ALTER TABLE documents ADD COLUMN url TEXT")
@@ -167,6 +199,7 @@ class DatabaseManager:
     async def save_document_record(self, doc_data: Dict[str, Any]):
         """
         Saves document metadata and content.
+        Also indexes into FTS.
         """
         if not self._sqlite_connection:
             await self.get_sqlite()
@@ -193,9 +226,65 @@ class DatabaseManager:
             doc_data.get("doc_type", "generico")
         )
         
+        # 1. Insert into main table
         async with self._sqlite_connection.execute(query, params) as cursor:
-            await self._sqlite_connection.commit()
-            return doc_id
+            pass # Transaction managed at connection level? aiosqlite usually commits on connection.commit()
+            
+        # 2. Insert into FTS (separate execute to avoid cursor mixup)
+        if doc_data.get("text_content"):
+            await self._sqlite_connection.execute(
+                "INSERT INTO documents_fts (id, text_content, filename, source) VALUES (?, ?, ?, ?)",
+                (doc_id, doc_data["text_content"], doc_data["filename"], doc_data["source"])
+            )
+        
+        await self._sqlite_connection.commit()
+        return doc_id
+            
+    async def search_documents_keyword(self, query_text: str, limit: int = 5) -> list[dict]:
+        """
+        BM25-like search using SQLite FTS5.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        # Parametrized query for FTS is slightly tricky in SQLite, usually requires substitution or specific syntax
+        # FTS5 query syntax: match 'phrase'
+        # Safety: We should sanitize input slightly to prevent FTS syntax errors (like unmatched quotes)
+        safe_query = query_text.replace("'", "''").replace('"', '""')
+        
+        # Simple match query
+        sql = f"""
+        SELECT id, text_content, filename, source, rank 
+        FROM documents_fts 
+        WHERE documents_fts MATCH ? 
+        ORDER BY rank 
+        LIMIT ?
+        """
+        
+        try:
+            async with self._sqlite_connection.execute(sql, (safe_query, limit)) as cursor:
+                rows = await cursor.fetchall()
+                results = []
+                for row in rows:
+                    # Map to compatible format with vector search result
+                    results.append({
+                        "content": row["text_content"], # This returns FULL content, might be heavy. FTS supports snippets.
+                        # For Reranking, full content is okay if we chunk it later, but our documents_fts has full doc?
+                        # ACTUALLY: FTS on full documents is bad for retrieval context.
+                        # We usually want chunks.
+                        # BUT: The requirement mimics keyword search on LEGISLATION (e.g. "Lei 8666").
+                        # Finding the document is good.
+                        "metadata": {
+                            "filename": row["filename"],
+                            "source": row["source"],
+                            "doc_id": row["id"]
+                        },
+                        "score": 0.5 # Placeholder score for keyword match
+                    })
+                return results
+        except Exception as e:
+            logger.warning(f"FTS search failed (possibly invalid syntax): {e}")
+            return []
     async def index_pre_chunked_data(self, doc_id: str, chunks: List[Dict], base_metadata: dict):
         """
         Indexes pre-calculated chunks (e.g. from HtmlLawIngestor) directly into ChromaDB.
@@ -245,11 +334,14 @@ class DatabaseManager:
         doc_type = "general"
         source = metadata.get("source", "")
         filename = metadata.get("filename", "").lower()
+        meta_doc_type = metadata.get("doc_type", "")
         
         if source == "official_gazette":
             doc_type = "diario_oficial"
-        elif "lei" in filename or "decreto" in filename:
+        elif meta_doc_type == "lei" or "lei" in filename or "decreto" in filename:
              doc_type = "legislation"
+        elif meta_doc_type: # Trust other types
+             doc_type = meta_doc_type
             
         # 2. Split (Without Header, as requested)
         logger.info(f"🔍 Fragmentando texto em blocos para indexação...")

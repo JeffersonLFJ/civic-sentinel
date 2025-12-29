@@ -68,3 +68,31 @@ def test_context_injection(splitter):
     
     assert len(chunks) == 1
     assert chunks[0] == "[DOC TESTE] Conteúdo simples."
+
+def test_split_law_hierarchy_state(splitter):
+    """
+    Testes a detecção de hierarquia (Título, Capítulo) e injeção de estado no próximo chunk.
+    Regra: Se um Artigo 10 contém 'CAPÍTULO II' no final, o Artigo 11 deve iniciar com '[CAPÍTULO II]'.
+    """
+    text = """
+    Art. 10. O prazo de validade do concurso...
+
+    CAPÍTULO II
+    DOS PRAZOS E RECURSOS
+
+    Art. 11. Os recursos deverão ser interpostos...
+    """
+    
+    chunks = splitter.split(text, doc_type="legislation")
+    
+    # Chunk 0: Art 10 (contém o texto CAPÍTULO II pois faz parte do corpo anterior)
+    # Chunk 1: Art 11 (Deve ter recebido o prefixo [CAPÍTULO II])
+    
+    assert len(chunks) == 2
+    assert "Art. 10" in chunks[0]
+    assert "Art. 11" in chunks[1]
+    
+    # O Pulo do Gato: ver se o Art 11 herdou o contexto
+    assert "[CAPÍTULO II]" in chunks[1]
+    assert "DOS PRAZOS E RECURSOS" not in chunks[1] # Apenas headers exatos (CAPÍTULO II) são capturados pelo regex atual para estado
+

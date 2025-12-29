@@ -89,6 +89,11 @@ async def process_document_task(file_location: str, filename: str, source: str, 
                 #    doc_type = "lei" 
 
         
+        # 3. Classificação de Urgência (Triagem)
+        from src.reasoning.alert_classifier import alert_classifier
+        urgency = await alert_classifier.classify(ocr_result["extracted_text"])
+        logger.info(f"🚨 Classificação de Urgência: {urgency.upper()}")
+
         # Persistence Logic
         storage_path = None
         if source == "admin" or source == "local_ingest":
@@ -107,23 +112,26 @@ async def process_document_task(file_location: str, filename: str, source: str, 
             "storage_path": storage_path,
             "text_content": ocr_result["extracted_text"],
             "ocr_method": ocr_result["ocr_method"],
-            "doc_type": doc_type
+            "doc_type": doc_type,
+            "urgency": urgency # Saved to metadata later or extended table
         }
         
         doc_id = await db_manager.save_document_record(doc_data)
         
         # Index Chroma
+        base_meta = {"source": source, "filename": filename, "doc_type": doc_type, "urgency": urgency}
+        
         if structured_chunks:
             await db_manager.index_pre_chunked_data(
                 doc_id=doc_id, 
                 chunks=structured_chunks, 
-                base_metadata={"source": source, "filename": filename, "doc_type": doc_type}
+                base_metadata=base_meta
             )
         else:
             await db_manager.index_document_text(
                 doc_id=doc_id, 
                 text=doc_data["text_content"],
-                metadata={"source": source, "filename": filename, "doc_type": doc_type}
+                metadata=base_meta
             )
             
         logger.info(f"🎉 Indexação concluída com sucesso! ID: {doc_id}")

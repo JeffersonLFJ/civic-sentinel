@@ -62,16 +62,52 @@ class SmartTextSplitter:
                  final_chunks.append(chunks[0].strip())
              chunks = chunks[1:]
         
+        # Regex for hierarchy detection (lines starting with TITULO, CAPITULO, etc)
+        # Matches: "CAPÍTULO I", "Seção II", "TÍTULO III" case insensitive
+        hierarchy_pattern = re.compile(r"(?:^|\n)\s*(LIVRO|TÍTULO|CAPÍTULO|SEÇÃO|SUBSEÇÃO)\s+([IVXLCDM\d]+)(?:.{0,100})", re.IGNORECASE)
+        
+        
+        # Better State Management
+        hierarchy_state = {}
+        hierarchy_levels = {"LIVRO": 1, "TÍTULO": 2, "CAPÍTULO": 3, "SEÇÃO": 4, "SUBSEÇÃO": 5}
+
         for i in range(0, len(chunks), 2):
             if i+1 < len(chunks):
                 header = chunks[i].strip() # e.g., "Art. 1º"
                 body = chunks[i+1]
+                
+                # 1. Build Context String from current state
+                # Sort by level (1 to 5)
+                active_context = [
+                    hierarchy_state[k] for k in sorted(hierarchy_state.keys(), key=lambda x: hierarchy_levels.get(x, 99))
+                ]
+                context_str = " > ".join(active_context)
+                
                 combined = (header + " " + body).strip()
                 
+                # Prepend context!
+                if context_str:
+                    combined = f"[{context_str}] {combined}"
+                
+                # 2. Check for NEW hierarchy in this body to update state for NEXT chunks
+                matches = list(hierarchy_pattern.finditer(body))
+                for m in matches:
+                    full_match = m.group(0).strip().replace("\n", " ") # Flatten
+                    type_key = m.group(1).upper() # CAPÍTULO, TÍTULO...
+                    
+                    # Update State: set this type
+                    hierarchy_state[type_key] = full_match
+                    
+                    # Clear any deeper levels (e.g. if Chapter found, clear Section)
+                    current_lvl = hierarchy_levels.get(type_key, 99)
+                    keys_to_remove = [k for k, v in hierarchy_levels.items() if v > current_lvl and k in hierarchy_state]
+                    for k in keys_to_remove:
+                        del hierarchy_state[k]
+
                 # Check size. If huge, sub-split by Paragraphs/Items
                 if len(combined) > 2500:
                     # Sub-split logic
-                    sub_chunks = self._subsplit_law_chunk(header, body)
+                    sub_chunks = self._subsplit_law_chunk(header, body, context_prefix=f"[{context_str}] " if context_str else "")
                     final_chunks.extend(sub_chunks)
                 else:
                     final_chunks.append(combined)
@@ -81,7 +117,8 @@ class SmartTextSplitter:
                      
         return [c for c in final_chunks if c]
 
-    def _subsplit_law_chunk(self, header: str, body: str) -> List[str]:
+
+    def _subsplit_law_chunk(self, header: str, body: str, context_prefix: str = "") -> List[str]:
         """
         Splits a large Article body by Paragraphs (§) or Items (I, II, III).
         Prepends the 'header' to each child.
@@ -92,19 +129,19 @@ class SmartTextSplitter:
             sub_chunks = []
             # First part (caput)
             if parts[0].strip():
-                sub_chunks.append(f"{header} {parts[0].strip()}")
+                sub_chunks.append(f"{context_prefix}{header} {parts[0].strip()}")
             
             for k in range(1, len(parts), 2):
                 if k+1 < len(parts):
                     para_header = parts[k].strip()
                     para_body = parts[k+1]
                     # Inject Parent Header
-                    sub_chunks.append(f"{header} > {para_header} {para_body}".strip())
+                    sub_chunks.append(f"{context_prefix}{header} > {para_header} {para_body}".strip())
             return sub_chunks
             
         # Fallback: simple paragraph split if no § but huge
         paragraphs = self.split_by_paragraphs(body, max_chars=2000)
-        return [f"{header} (Cont.) {p}" for p in paragraphs]
+        return [f"{context_prefix}{header} (Cont.) {p}" for p in paragraphs]
 
 
     def split_by_paragraphs(self, text: str, max_chars: int = 1500) -> List[str]:
