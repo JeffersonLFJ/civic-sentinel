@@ -64,19 +64,20 @@ window.showSection = showSection;
 const auditTableBody = document.getElementById('auditTableBody');
 
 async function clearAuditLogs() {
-    if (!confirm("Tem certeza que deseja apagar TODO o histórico de auditoria?")) return;
+    const confirmed = await showConfirm("Tem certeza que deseja apagar TODO o histórico de auditoria?", "Limpar Auditoria", "Apagar Tudo");
+    if (!confirmed) return;
 
     try {
         const res = await fetch('/api/admin/audit', { method: 'DELETE' });
         const data = await res.json();
         if (res.ok) {
-            alert(data.message);
+            toast.success(data.message);
             fetchAuditoria();
         } else {
-            alert("Erro: " + data.detail);
+            toast.error("Erro: " + data.detail);
         }
     } catch (e) {
-        alert("Erro de conexão: " + e.message);
+        toast.error("Erro de conexão: " + e.message);
     }
 }
 
@@ -275,14 +276,14 @@ async function approveStaging(id) {
         });
         const result = await response.json();
         if (result.status === 'success') {
-            alert("Documento aprovado e indexado!");
+            toast.success("Documento aprovado e indexado!");
             fetchStaging();
-            fetchDocuments(); // Changed from fetchDocs() to fetchDocuments() for consistency
+            fetchDocuments();
         } else {
-            alert("Erro: " + result.detail);
+            toast.error("Erro: " + result.detail);
         }
     } catch (e) {
-        alert("Erro na aprovação: " + e.message);
+        toast.error("Erro na aprovação: " + e.message);
     }
 }
 
@@ -290,17 +291,18 @@ async function approveAllStaging() {
     const stagingTable = document.getElementById('stagingTableBody');
     const rows = stagingTable.querySelectorAll('tr');
     if (rows.length === 0 || rows[0].innerText.includes("Vazio")) {
-        alert("Nada para aprovar.");
+        toast.warning("Nada para aprovar.");
         return;
     }
 
-    if (!confirm("Isso aprovará TODOS os documentos com os metadados atuais. Continuar?")) return;
+    const confirmed = await showConfirm("Isso aprovará TODOS os documentos com os metadados atuais. Continuar?", "Aprovar Tudo", "Aprovar Todos", "primary");
+    if (!confirmed) return;
 
     for (const row of rows) {
         const btn = row.querySelector('button.primary-sm');
         if (btn) {
             btn.click();
-            await new Promise(r => setTimeout(r, 1000)); // Delay pequeno para evitar sobrecarga
+            await new Promise(r => setTimeout(r, 1000));
         }
     }
 }
@@ -314,13 +316,13 @@ async function saveSystemPrompt() {
             body: JSON.stringify({ content: newContent })
         });
         if (res.ok) {
-            alert("Prompt salvo com sucesso!");
+            toast.success("Prompt salvo com sucesso!");
             closePromptModal();
         } else {
-            alert("Erro ao salvar prompt.");
+            toast.error("Erro ao salvar prompt.");
         }
     } catch (e) {
-        alert("Erro de conexão: " + e.message);
+        toast.error("Erro de conexão: " + e.message);
     }
 }
 window.closePromptModal = closePromptModal; // Make global for onclick
@@ -530,7 +532,10 @@ window.applyBulkType = () => {
 
 window.processSelectedScan = async () => {
     const checks = document.querySelectorAll('.scan-checkbox:checked');
-    if (checks.length === 0) return alert("Selecione ao menos um arquivo!");
+    if (checks.length === 0) {
+        toast.warning("Selecione ao menos um arquivo!");
+        return;
+    }
 
     const items = Array.from(checks).map(c => ({
         filename: c.dataset.filename,
@@ -550,7 +555,7 @@ window.processSelectedScan = async () => {
         const data = await res.json();
         // Progress will be updated by log polling
     } catch (e) {
-        alert("Erro no processamento: " + e.message);
+        toast.error("Erro no processamento: " + e.message);
         hideLoading();
     }
 };
@@ -568,7 +573,10 @@ document.getElementById('cancelUpload').addEventListener('click', () => {
 
 document.getElementById('confirmUpload').addEventListener('click', async () => {
     const file = fileInput.files[0];
-    if (!file) return alert("Selecione um arquivo!");
+    if (!file) {
+        toast.warning("Selecione um arquivo!");
+        return;
+    }
 
     // Close modal, open overlay
     document.getElementById('uploadModal').classList.add('hidden');
@@ -593,7 +601,7 @@ document.getElementById('confirmUpload').addEventListener('click', async () => {
     } catch (e) {
         hideLoading();
         stopLogPolling();
-        alert(e.message);
+        toast.error(e.message);
     }
 });
 
@@ -711,10 +719,10 @@ document.getElementById('confirmDelete').addEventListener('click', async () => {
             deleteModal.style.display = 'none';
             fetchDocuments();
         } else {
-            alert("Erro ao excluir.");
+            toast.error("Erro ao excluir.");
         }
     } catch (e) {
-        alert(e.message);
+        toast.error(e.message);
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;

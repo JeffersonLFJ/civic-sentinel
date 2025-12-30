@@ -54,12 +54,16 @@
                     <h1>Gestão de Documentos</h1>
                     <div class="actions">
                         <button id="promptBtn" class="btn secondary"
-                            style="background: #0f172a; color: #a5b4fc; border: 1px solid #334155;">⚙️ Prompt</button>
-                        <button id="refreshBtn" class="btn secondary">🔄 Atualizar</button>
+                            style="background: #0f172a; color: #a5b4fc; border: 1px solid #334155;"
+                            aria-label="Editar Prompt do Sistema">⚙️ Prompt</button>
+                        <button id="refreshBtn" class="btn secondary" aria-label="Atualizar lista de documentos">🔄
+                            Atualizar</button>
                         <button id="scanLocalBtn" class="btn secondary"
-                            style="background: #0f172a; color: #fff; border: 1px solid #334155;">📁 Scan Pasta
+                            style="background: #0f172a; color: #fff; border: 1px solid #334155;"
+                            aria-label="Escanear pasta local de ingestão">📁 Scan Pasta
                             Local</button>
-                        <button id="uploadBtn" class="btn primary">+ Upload Manual</button>
+                        <button id="uploadBtn" class="btn primary" aria-label="Fazer upload de documento">+ Upload
+                            Manual</button>
                     </div>
                 </header>
 
@@ -334,7 +338,11 @@
         </div>
     </div>
 
-    <script src="app.js?v=4"></script>
+    <!-- Component Imports -->
+    <script src="components/toast.js"></script>
+    <script src="components/confirm-modal.js"></script>
+    <script src="components/button-utils.js"></script>
+    <script src="app.js?v=5"></script>
 </body>
 
 </html>
