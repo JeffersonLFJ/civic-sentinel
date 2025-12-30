@@ -18,9 +18,9 @@ O Sentinela usa um motor de Inteligência Artificial chamado Ollama.
 2.  Instale e abra o programa.
 3.  Abra seu Terminal (ou Prompt de Comando) e digite:
     ```bash
-    ollama run gemma2:9b
+    ollama run gemma3:27b
     ```
-    *Isso vai baixar os "pesos" da IA (aprox. 5GB). Espere terminar até aparecer um chat.*
+    *Isso vai baixar os "pesos" da IA (aprox. 17GB). Espere terminar até aparecer um chat.*
 
 ### Passo 2: Baixar o Sentinela
 Ainda no terminal, execute:
@@ -81,7 +81,7 @@ O sistema foi construído em fases modulares. Para detalhes técnicos profundos,
 4.  **[Engenharia de Prompt Jurídica](docs/relatorio_fase_4_juridico.md)**: A implementação da "Bússola Constitucional" e a Matriz de Decisão de Kelsen.
 5.  **[Validação de Dados](docs/relatorio_fase_5_validacao.md)**: Os protocolos de Quarentena (`/admin/staging`) e o Firewall de Privacidade (PII Scrubber).
 6.  **[Diagnósticos e Auditoria](docs/relatorio_fase_6_diagnosticos.md)**: A ferramenta "Raio-X" que explica o processo de pensamento da IA passo-a-passo.
-7.  **Frontend (Em Breve)**: A interface visual que conectará o cidadão a essa inteligência.
+7.  **Frontend Administrativo**: Interface visual em `/admin` para gestão de documentos, quarentena e auditoria.
 
 **Infraestrutura**: Para detalhes sobre Stack, Versões e Segurança, veja o [Relatório de Infraestrutura](docs/security_and_infrastructure.md).
 

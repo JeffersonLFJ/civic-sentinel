@@ -18,45 +18,8 @@ class GemmaClient:
         self.model = settings.LLM_MODEL
         self.timeout = settings.LLM_TIMEOUT
         
-    async def generate(
-        self,
-        prompt: str,
-        images: Optional[List[str]] = None,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.3,
-        top_k: int = 40,
-        json_mode: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Generates completion from Ollama.
-        
-        Args:
-            prompt: User prompt
-            images: List of base64 encoded strings or file paths
-            system_prompt: System instruction override
-            temperature: Creativity (0.0 to 1.0)
-            top_k: Number of tokens to consider (1-100)
-            json_mode: Force JSON output structure
-        """
-        
-        # ... (lines 40-66 omitted for brevity, logic matches)
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        
-        user_msg = {"role": "user", "content": prompt}
-        
-        if images:
-             # Image handling logic same as before...
-             # To save space in replace block, I am repeating the context headers but need to be careful.
-             # Actually I can just target the signature and options block.
-             pass 
 
-        # Let's target the exact signature change and the payload change.
-        # This wrapper tool call might be messy if I try to skip too much.
-        # I'll rewrite the function signature and the payload construction.
-        
-    # Rethinking: I will use a larger block to ensure safety.
+    # generate_stream handles streaming responses
     async def generate_stream(
         self,
         prompt: str,

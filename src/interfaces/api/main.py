@@ -2,8 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 from src.config import settings
 from src.interfaces.api.routes import health, chat, upload, documents, admin
 from src.core.database import db_manager
