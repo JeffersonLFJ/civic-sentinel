@@ -167,40 +167,22 @@ class QueridoDiarioIngestor:
                 logger.warning(f"Ignorando {g['date']} - Sem texto extraível disponível na API ou via OCR.")
                 continue
 
-            # 3. Armazenamento
+            # 3. Armazenamento (Envia para Quarentena)
             doc_data = {
                 "filename": f"DO_{g['territory_name']}_{g['date']}.txt",
-                "source": "official_gazette", # Alterado para manter consistência com metadados
+                "source": "official_gazette",
                 "text_content": full_text,
                 "ocr_method": ocr_method if 'ocr_method' in locals() else "querido_diario_api", 
                 "url": g.get("url"),
-                "publication_date": g.get("date")
+                "publication_date": g.get("date"),
+                "sphere": "municipal",
+                "status": "pending"
             }
             
             # Chama o seu DatabaseManager existente
             doc_id = await db_manager.save_document_record(doc_data)
             
-            # 4. CRITICAL: Indexing for RAG
-            # Metadata for context injection
-            metadata = {
-                "source": "official_gazette",
-                "date": g.get("date"),
-                "territory": g.get("territory_name"),
-                "url": g.get("url"),
-                "filename": doc_data["filename"],
-                "publication_date": g.get("date")
-            }
-            
-            # Check for extra keywords filter if passed (though server side filtered already)
-            # Keeping strictly relevant text.
-            
-            await db_manager.index_document_text(
-                doc_id=doc_id, 
-                text=full_text,
-                metadata=metadata
-            )
-            
-            logger.info(f"Guardado e indexado: Diário de {g['date']}")
+            logger.info(f"⏳ Diário de {g['date']} guardado na QUARENTENA. ID: {doc_id}")
 
     async def close(self):
         await self.client.aclose()

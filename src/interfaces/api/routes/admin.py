@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from pathlib import Path
 from src.core.database import db_manager
@@ -50,8 +50,10 @@ async def get_system_stats():
 @router.get("/audit/{log_id}")
 async def get_audit_detail(log_id: str):
     """
-    Returns full detail of an interaction for the Raio-X view.
+    Returns full detail of an interaction for the Raio-X view (Reasoning Map).
+    Parses stored JSON fields (details, sources_json) into objects.
     """
+    import json
     try:
         if not db_manager._sqlite_connection:
             await db_manager.get_sqlite()
@@ -60,7 +62,34 @@ async def get_audit_detail(log_id: str):
             row = await cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Log not found")
-            return dict(row)
+            
+            data = dict(row)
+            
+            # RAIO-X: Parse JSON fields for structured frontend display
+            try:
+                if data.get("details") and data["details"].startswith("{"):
+                    data["details"] = json.loads(data["details"])
+            except:
+                pass # Keep as string if parsing fails (legacy logs)
+                
+            try:
+                if data.get("sources_json"):
+                    data["sources_json"] = json.loads(data["sources_json"])
+            except:
+                pass
+                
+            # Compute inferred "Reasoning Path" for visualization
+            if isinstance(data.get("details"), dict):
+                intent = data["details"].get("intent", {})
+                data["reasoning_map"] = {
+                    "step_1_intent": intent.get("understood_intent"),
+                    "step_2_sphere": intent.get("sphere"),
+                    "step_3_ambiguity": intent.get("ambiguity_score"),
+                    "step_4_retrieval": f"{data['details'].get('rag_count', 0)} sources",
+                    "step_5_confidence": data.get("confidence_score")
+                }
+            
+            return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -189,5 +218,103 @@ async def process_local_files(request: LocalProcessRequest):
             "message": f"Processamento concluído: {results['processed']} arquivos ingeridos.",
             "details": results
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Application Settings ---
+
+from src.core.settings_manager import settings_manager
+
+@router.get("/settings")
+async def get_settings():
+    """Returns current dynamic settings."""
+    return settings_manager.get_all()
+
+@router.post("/settings")
+async def update_settings(updates: Dict[str, Any] = Body(...)):
+    """Updates dynamic settings."""
+    try:
+        settings_manager.update(updates)
+        return {"status": "success", "message": "Configurações atualizadas."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/settings/reset_prompt")
+async def reset_prompt():
+    """Resets system prompt to default (hardcoded empty string, will force file reload)."""
+    try:
+        settings_manager.update({"system_prompt": ""})
+        return {"status": "success", "message": "Prompt de sistema reiniciado para padrão de arquivo/código."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/settings/purge_cache")
+async def purge_vector_cache():
+    """
+    DANGER: Clears ChromaDB vectors.
+    """
+    try:
+        success = await db_manager.clear_vector_store()
+        if success:
+            return {"status": "success", "message": "Cache vetorial purgado com sucesso."}
+        else:
+            raise HTTPException(status_code=500, detail="Falha ao limpar cache.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Staging Area (Quarentena) ---
+
+@router.get("/staging")
+async def get_staging_documents():
+    """
+    Lista documentos na Quarentena (status='pending').
+    """
+    try:
+        docs = await db_manager.get_pending_documents()
+        return {"status": "success", "documents": docs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/staging/{doc_id}/text")
+async def get_staging_text(doc_id: str):
+    """
+    Retorna o texto integral de um documento para inspeção.
+    """
+    try:
+        # Reusamos a lógica de inspeção mas focada no texto bruto
+        async with db_manager._sqlite_connection.execute("SELECT text_content FROM documents WHERE id = ?", (doc_id,)) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Documento não encontrado")
+            return {"text": row["text_content"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ApprovalRequest(BaseModel):
+    doc_type: str
+    sphere: str
+    publication_date: Optional[str] = None
+
+@router.post("/staging/{doc_id}/approve")
+async def approve_document(doc_id: str, request: ApprovalRequest):
+    """
+    Corrige metadados e move documento para 'active' (vetoriza).
+    """
+    try:
+        # 1. Update Metadata
+        updates = {
+            "doc_type": request.doc_type,
+            "sphere": request.sphere,
+            "publication_date": request.publication_date
+        }
+        await db_manager.update_document_metadata(doc_id, updates)
+        
+        # 2. Activate (Vectorize)
+        success = await db_manager.activate_document(doc_id)
+        
+        if success:
+            return {"status": "success", "message": "Documento aprovado e indexado com sucesso."}
+        else:
+            raise HTTPException(status_code=500, detail="Falha na ativação do documento.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

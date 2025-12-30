@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     # LLM
     OLLAMA_URL: str = "http://localhost:11434"
-    LLM_MODEL: str = "gemma3:27b"  # Ensure model name matches what user has/needs
+    LLM_MODEL: str = "sentinela-civico"  # Custom model with built-in personality
     LLM_TIMEOUT: int = 120
     
     # OCR

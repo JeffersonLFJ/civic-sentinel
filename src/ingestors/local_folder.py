@@ -66,9 +66,12 @@ class LocalFolderIngestor:
                 
                 # Reutilizamos a lógica de upload para manter consistência
                 from src.interfaces.api.routes.upload import process_document_task
-                # Mockamos o upload_dir enviando o path direto
-                # Como process_document_task espera um path e doc_type, funciona:
-                await process_document_task(str(file_path), filename, "local_ingest", doc_type)
+                from src.core.constants import Sphere
+                
+                # Se o usuário não enviou a esfera, manda 'unknown' para disparar as heurísticas automáticas
+                sphere = item.get("sphere", Sphere.DESCONHECIDA.value)
+                
+                await process_document_task(str(file_path), filename, "local_ingest", doc_type, sphere)
                 
                 results["processed"] += 1
                 

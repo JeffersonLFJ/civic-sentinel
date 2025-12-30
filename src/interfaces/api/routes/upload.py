@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from src.core.ocr_engine import ocr_engine
 from src.config import settings
+from src.core.constants import DocType, Sphere
 import shutil
 import os
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger("src.interfaces.api.routes.upload")
 router = APIRouter()
 
-async def process_document_task(file_location: str, filename: str, source: str, doc_type: str):
+async def process_document_task(file_location: str, filename: str, source: str, doc_type: str, sphere: str = Sphere.MUNICIPAL.value):
     """
     Função core de processamento compartilhada entre Upload manual e Scan Local.
     """
@@ -24,87 +25,127 @@ async def process_document_task(file_location: str, filename: str, source: str, 
         ocr_result = {"extracted_text": "", "ocr_method": "unknown"}
         structured_chunks = None # Specific for Laws
         
-        # --- 1. Extração Inicial (A "bagunçada") ---
-        if doc_type == "lei" and filename.lower().endswith((".html", ".htm")):
-            from src.ingestors.html_law import html_law_ingestor
-            logger.info(f"⚖️ Ingestão: {filename} detectado como Lei.")
-            result = await html_law_ingestor.process_file(str(file_path), filename)
-            
-            if result["status"] == "success":
-                ocr_result["extracted_text"] = result["full_text"]
-                ocr_result["ocr_method"] = "html_law_parser"
-                structured_chunks = result["chunks"]
-            else:
-                ocr_result["extracted_text"] = file_path.read_text(errors="ignore")
+        # --- 1. Auto-Dispatch & Extraction Logic ---
         
+        # Determine Dispatcher and Archetype
+        # We preserve the user's manual category for the SQL database to avoid breaking UI/Filters.
+        # But we refine the 'doc_type' metadata for the LLM ONLY if the choice was 'lei'.
+        
+        final_meta_type = doc_type
+        
+        # A) LEGISLATION DISPATCH
+        if doc_type in ["lei", "legislation"]:
+            # Specific Kelsen sub-classification ONLY for 'lei' selection
+            final_meta_type = DocType.LEI_ORDINARIA.value
+            fname_lower = filename.lower()
+            if "constituicao" in fname_lower:
+                final_meta_type = DocType.CONSTITUICAO.value
+            elif "complementar" in fname_lower:
+                final_meta_type = DocType.LEI_COMPLEMENTAR.value
+            elif "decreto" in fname_lower:
+                final_meta_type = DocType.DECRETO.value
+            elif "portaria" in fname_lower:
+                final_meta_type = DocType.PORTARIA.value
+            elif "resolucao" in fname_lower:
+                final_meta_type = DocType.RESOLUCAO.value
+            
+            if fname_lower.endswith((".html", ".htm")):
+                from src.ingestors.html_law import html_law_ingestor
+                logger.info(f"⚖️ Ingestão (Lei HTML - {final_meta_type}): {filename}")
+                result = await html_law_ingestor.process_file(str(file_path), filename)
+                if result["status"] == "success":
+                    ocr_result["extracted_text"] = result["full_text"]
+                    ocr_result["ocr_method"] = "html_law_parser"
+                    structured_chunks = result["chunks"]
+                else:
+                    ocr_result["extracted_text"] = file_path.read_text(errors="ignore")
+            else:
+                logger.info(f"⚖️ Ingestão (Lei PDF/OCR - {final_meta_type}): {filename}")
+                ocr_result = await ocr_engine.process_document(str(file_path))
+
+        # B) TABLE DISPATCH
         elif doc_type == "tabela":
-            logger.info(f"📊 Ingestão: {filename} detectado como Tabela.")
+            logger.info(f"📊 Ingestão (Tabela): {filename}")
+            from src.utils.text_processing import text_splitter
             import csv
-            extracted_text = ""
-            extract_method = "unknown" # Initialize extract_method
+            rows = []
             if filename.lower().endswith(".csv"):
-                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                     reader = csv.reader(f)
                     rows = list(reader)
-                    if rows:
-                        header = "| " + " | ".join(rows[0]) + " |"
-                        separator = "| " + " | ".join(["---"] * len(rows[0])) + " |"
-                        body = "\n".join(["| " + " | ".join(row) + " |" for row in rows[1:]])
-                        extracted_text = f"{header}\n{separator}\n{body}"
-                    extract_method = "csv_direct"
             elif filename.lower().endswith((".xlsx", ".xls")):
-                try:
+                 try:
                     import pandas as pd
                     df = pd.read_excel(file_path)
-                    extracted_text = df.to_markdown(index=False)
-                    extract_method = "excel_pandas"
-                except Exception as e:
-                    extracted_text = f"Erro Excel: {e}"
-                    extract_method = "failed_excel"
+                    rows = [df.columns.tolist()] + df.values.tolist()
+                 except Exception as e:
+                    ocr_result["extracted_text"] = f"Erro Excel: {e}"
             
-            ocr_result["extracted_text"] = extracted_text
-            ocr_result["ocr_method"] = extract_method
+            if rows:
+                table_chunks = text_splitter.split_table(rows, chunk_size=50)
+                structured_chunks = []
+                full_text_buffer = []
+                for idx, chunk_text in enumerate(table_chunks):
+                    structured_chunks.append({
+                        "text": chunk_text,
+                        "metadata": {
+                            "chunk_type": "table_fragment",
+                            "page_number": idx + 1,
+                            "doc_type": doc_type # Keeps 'tabela'
+                        }
+                    })
+                    full_text_buffer.append(chunk_text)
+                ocr_result["extracted_text"] = "\n\n".join(full_text_buffer)
+                ocr_result["ocr_method"] = "table_splitter_v1"
+            else:
+                ocr_result["extracted_text"] = "Tabela vazia ou erro de leitura."
 
+        # C) DIARIO DISPATCH
+        elif doc_type in ["diario", "diario_oficial"]:
+            logger.info(f"🏛️ Ingestão (Diário Oficial): {filename}")
+            ocr_result = await ocr_engine.process_document(str(file_path))
+
+        # D) DENUNCIA DISPATCH
+        elif doc_type == "denuncia":
+            logger.info(f"📄 Ingestão (Denúncia): {filename}")
+            ocr_result = await ocr_engine.process_document(str(file_path))
+
+        # E) GENERAL DISPATCH (Default)
         else:
-            logger.info(f"🔍 Ingestão: {filename} processamento padrão (OCR/PDF).")
+            logger.info(f"🔍 Ingestão (Geral): {filename}")
             ocr_result = await ocr_engine.process_document(str(file_path))
             
-            # --- 2. Análise Semântica / Refinamento (A "distinção melhor") ---
+            # Healing Heuristic for PDFs
             text = ocr_result.get("extracted_text", "")
-            
-            if text and not structured_chunks:
+            if text:
                 import re
-                # A) Heurística de Correção de Quebra de Linha (PDFs "quebrados")
-                # Ex: "sis\ntema" -> "sistema" (se não houver ponto antes)
-                logger.info("Mecanismo de 'Healing': Corrigindo quebras de linha artificiais...")
-                # Remove \n se precedido de letra e seguido de letra minúscula (continuidade)
                 text = re.sub(r'(?<=[a-zA-Z0-9,])\n(?=[a-zà-ù])', ' ', text)
-                ocr_result["extracted_text"] = text
-
-                # B) Detecção de Lei em PDF - REMOVIDO PARA RESPEITAR SELEÇÃO DO USUÁRIO
-                # A inteligência de chunking recursivo já lidará bem com o texto.
-                # law_patterns = len(re.findall(r'(?:^|\n)\s*Art\.\s*\d+', text, re.IGNORECASE))
-                # if law_patterns > 5:
-                #    logger.info("⚖️ Detectada estrutura de LEI dentro do PDF (Hybrid Chunking).")
-                #    doc_type = "lei" 
-
+                ocr_result["extracted_text"] = text 
         
-        # 3. Classificação de Urgência (Triagem)
-        from src.reasoning.alert_classifier import alert_classifier
-        urgency = await alert_classifier.classify(ocr_result["extracted_text"])
-        logger.info(f"🚨 Classificação de Urgência: {urgency.upper()}")
+        # --- 2. Sphere Heuristics ---
+        # Se a esfera for desconhecida, tentamos inferir pelo nome ou conteúdo.
+        final_sphere = sphere
+        content_sample = ocr_result["extracted_text"][:2000].lower()
+        fname_lower = filename.lower()
+        
+        if final_sphere == Sphere.DESCONHECIDA.value:
+            if any(k in fname_lower or k in content_sample for k in ["união", "brasil", "nacional", "federal", "ministério"]):
+                final_sphere = Sphere.FEDERAL.value
+            elif any(k in fname_lower or k in content_sample for k in ["estadual", "estado de", "rj", "governadoria"]):
+                final_sphere = Sphere.ESTADUAL.value
+            elif any(k in fname_lower or k in content_sample for k in ["prefeitura", "municipal", "município", "nova iguaçu", "semus"]):
+                final_sphere = Sphere.MUNICIPAL.value
 
         # Persistence Logic
         storage_path = None
-        if source == "admin" or source == "local_ingest":
-            # Se for admin, movemos para processed. 
-            # Se for local_ingest, COPIAMOS (ou movemos se preferir, manteremos compatibilidade com admin)
+        if source in ["admin", "local_ingest"]:
+            # Move ou copia para processed
             final_path = processed_dir / filename
             if str(file_path) != str(final_path):
                 shutil.copy2(str(file_path), str(final_path))
             storage_path = str(final_path)
         
-        # Save DB
+        # Save DB - WE KEEP THE ORIGINAL doc_type HERE
         from src.core.database import db_manager
         doc_data = {
             "filename": filename,
@@ -112,29 +153,18 @@ async def process_document_task(file_location: str, filename: str, source: str, 
             "storage_path": storage_path,
             "text_content": ocr_result["extracted_text"],
             "ocr_method": ocr_result["ocr_method"],
-            "doc_type": doc_type,
-            "urgency": urgency # Saved to metadata later or extended table
+            "doc_type": doc_type, # PERSIST THE USER CHOICE
+            "sphere": final_sphere,
+            "status": "pending" # ALL uploads go to Quarentena
         }
         
         doc_id = await db_manager.save_document_record(doc_data)
         
-        # Index Chroma
-        base_meta = {"source": source, "filename": filename, "doc_type": doc_type, "urgency": urgency}
+        # --- 3. STAGING AREA BYPASS ---
+        # We DO NOT index in ChromaDB yet. 
+        # Vectorization only happens after Human Approval in Admin.
         
-        if structured_chunks:
-            await db_manager.index_pre_chunked_data(
-                doc_id=doc_id, 
-                chunks=structured_chunks, 
-                base_metadata=base_meta
-            )
-        else:
-            await db_manager.index_document_text(
-                doc_id=doc_id, 
-                text=doc_data["text_content"],
-                metadata=base_meta
-            )
-            
-        logger.info(f"🎉 Indexação concluída com sucesso! ID: {doc_id}")
+        logger.info(f"⏳ Documento {filename} enviado para QUARENTENA. ID: {doc_id}")
         return doc_id
         
     except Exception as e:
@@ -145,7 +175,8 @@ async def process_document_task(file_location: str, filename: str, source: str, 
 async def upload_document(
     file: UploadFile = File(...),
     source: str = Form("user"),
-    doc_type: str = Form("generico")
+    doc_type: str = Form("generico"),
+    sphere: str = Form(Sphere.MUNICIPAL.value)
 ):
     temp_dir = settings.DATA_DIR / "uploads_temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -156,16 +187,15 @@ async def upload_document(
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        doc_id = await process_document_task(str(file_location), file.filename, source, doc_type)
+        doc_id = await process_document_task(str(file_location), file.filename, source, doc_type, sphere)
         
         # Cleanup temp
-        if source != "admin": # Admin logic moves it in task or copies
-             if file_location.exists(): os.remove(file_location)
-        else:
-             if file_location.exists(): os.remove(file_location) # Já copiado para processed
+        if file_location.exists():
+            os.remove(file_location)
 
         return {"status": "processed", "doc_id": doc_id}
         
     except Exception as e:
-        if file_location.exists(): os.remove(file_location)
+        if file_location.exists():
+            os.remove(file_location)
         raise HTTPException(status_code=500, detail=str(e))

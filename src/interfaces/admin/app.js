@@ -35,20 +35,27 @@ async function fetchLogs() {
 }
 
 // Navegação entre Seções (Página Inteira)
-function showSection(sectionId) {
+function showSection(section) {
     document.getElementById('docsSection').classList.add('hidden');
     document.getElementById('auditSection').classList.add('hidden');
+    document.getElementById('stagingSection').classList.add('hidden');
+
     document.getElementById('docsNav').classList.remove('active');
     document.getElementById('auditNav').classList.remove('active');
+    document.getElementById('stagingNav').classList.remove('active');
 
-    if (sectionId === 'docs') {
+    if (section === 'docs') {
         document.getElementById('docsSection').classList.remove('hidden');
         document.getElementById('docsNav').classList.add('active');
         fetchDocuments();
-    } else if (sectionId === 'audit') {
+    } else if (section === 'audit') {
         document.getElementById('auditSection').classList.remove('hidden');
         document.getElementById('auditNav').classList.add('active');
         fetchAuditoria();
+    } else if (section === 'staging') {
+        document.getElementById('stagingSection').classList.remove('hidden');
+        document.getElementById('stagingNav').classList.add('active');
+        fetchStaging();
     }
 }
 window.showSection = showSection;
@@ -184,6 +191,118 @@ async function openPromptModal() {
 function closePromptModal() {
     promptModal.classList.add('hidden');
     promptModal.style.display = 'none';
+}
+
+// --- Quarentena (Staging Area) ---
+
+async function fetchStaging() {
+    const tableBody = document.getElementById('stagingTableBody');
+    tableBody.innerHTML = '<tr><td colspan="5">Carregando quarentena...</td></tr>';
+
+    try {
+        const response = await fetch('/api/admin/staging');
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            tableBody.innerHTML = '';
+            if (data.documents.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5">Vazio. Nenhuma pendência na quarentena.</td></tr>';
+            }
+            data.documents.forEach(doc => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><a href="#" onclick="inspectDocumentStaging('${doc.id}', '${doc.filename}')" style="color: #3b82f6; text-decoration: underline;">${doc.filename}</a></td>
+                    <td>
+                        <select id="type_${doc.id}" class="staging-select">
+                            <option value="lei_ordinaria" ${doc.doc_type === 'lei_ordinaria' ? 'selected' : ''}>Lei Ordinária</option>
+                            <option value="constituicao" ${doc.doc_type === 'constituicao' ? 'selected' : ''}>Constituição</option>
+                            <option value="decreto" ${doc.doc_type === 'decreto' ? 'selected' : ''}>Decreto</option>
+                            <option value="portaria" ${doc.doc_type === 'portaria' ? 'selected' : ''}>Portaria</option>
+                            <option value="diario_oficial" ${doc.doc_type === 'diario_oficial' ? 'selected' : ''}>Diário Oficial</option>
+                            <option value="documento_geral" ${doc.doc_type === 'documento_geral' ? 'selected' : ''}>Geral</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select id="sphere_${doc.id}" class="staging-select">
+                            <option value="municipal" ${doc.sphere === 'municipal' ? 'selected' : ''}>Municipal</option>
+                            <option value="federal" ${doc.sphere === 'federal' ? 'selected' : ''}>Federal</option>
+                            <option value="estadual" ${doc.sphere === 'estadual' ? 'selected' : ''}>Estadual</option>
+                            <option value="unknown" ${doc.sphere === 'unknown' ? 'selected' : ''}>Desconhecida</option>
+                        </select>
+                    </td>
+                    <td><input type="date" id="date_${doc.id}" value="${doc.publication_date || ''}" class="staging-input"></td>
+                    <td>
+                        <button onclick="approveStaging('${doc.id}')" class="btn primary-sm">Aprovar</button>
+                        <button onclick="deleteDoc('${doc.id}')" class="btn danger-sm" style="margin-left: 5px;">Excluir</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+    } catch (e) {
+        tableBody.innerHTML = `<tr><td colspan="5">Erro ao carregar: ${e.message}</td></tr>`;
+    }
+}
+
+async function inspectDocumentStaging(id, filename) {
+    document.getElementById('inspectTitle').innerText = `Inspecionando: ${filename}`;
+    document.getElementById('inspectTextBody').innerText = "Carregando texto...";
+    document.getElementById('inspectModal').classList.remove('hidden');
+
+    try {
+        const response = await fetch(`/api/admin/staging/${id}/text`);
+        const data = await response.json();
+        document.getElementById('inspectTextBody').innerText = data.text;
+    } catch (e) {
+        document.getElementById('inspectTextBody').innerText = "Erro ao carregar texto.";
+    }
+}
+
+function closeInspectModal() {
+    document.getElementById('inspectModal').classList.add('hidden');
+}
+
+async function approveStaging(id) {
+    const type = document.getElementById(`type_${id}`).value;
+    const sphere = document.getElementById(`sphere_${id}`).value;
+    const date = document.getElementById(`date_${id}`).value;
+
+    try {
+        const response = await fetch(`/api/admin/staging/${id}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc_type: type, sphere: sphere, publication_date: date })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            alert("Documento aprovado e indexado!");
+            fetchStaging();
+            fetchDocuments(); // Changed from fetchDocs() to fetchDocuments() for consistency
+        } else {
+            alert("Erro: " + result.detail);
+        }
+    } catch (e) {
+        alert("Erro na aprovação: " + e.message);
+    }
+}
+
+async function approveAllStaging() {
+    const stagingTable = document.getElementById('stagingTableBody');
+    const rows = stagingTable.querySelectorAll('tr');
+    if (rows.length === 0 || rows[0].innerText.includes("Vazio")) {
+        alert("Nada para aprovar.");
+        return;
+    }
+
+    if (!confirm("Isso aprovará TODOS os documentos com os metadados atuais. Continuar?")) return;
+
+    for (const row of rows) {
+        const btn = row.querySelector('button.primary-sm');
+        if (btn) {
+            btn.click();
+            await new Promise(r => setTimeout(r, 1000)); // Delay pequeno para evitar sobrecarga
+        }
+    }
 }
 
 async function saveSystemPrompt() {
@@ -378,10 +497,13 @@ async function fetchLocalFiles() {
                 <td style="padding:10px; color:#94a3b8;">${(f.size / 1024).toFixed(1)} KB</td>
                 <td style="padding:10px;">
                     <select class="scan-type-select" style="background:#1e293b; border:1px solid #334155; color:white; padding:4px; border-radius:4px; font-size:0.85rem;">
-                        <option value="lei" ${f.suggested_type === 'lei' ? 'selected' : ''}>Lei / Legislação (HTML)</option>
-                        <option value="denuncia" ${f.suggested_type === 'denuncia' ? 'selected' : ''}>Documentos (Imagens e PDF)</option>
-                        <option value="diario" ${f.suggested_type === 'diario' ? 'selected' : ''}>Diário Oficial</option>
-                        <option value="tabela" ${f.suggested_type === 'tabela' ? 'selected' : ''}>Planilhas / Tabelas</option>
+                        <option value="lei_ordinaria" ${f.suggested_type === 'lei_ordinaria' ? 'selected' : ''}>📜 Lei Ordinária</option>
+                        <option value="lei_complementar" ${f.suggested_type === 'lei_complementar' ? 'selected' : ''}>📜 Lei Complementar</option>
+                        <option value="constituicao" ${f.suggested_type === 'constituicao' ? 'selected' : ''}>⚖️ Constituição</option>
+                        <option value="decreto" ${f.suggested_type === 'decreto' ? 'selected' : ''}>📄 Decreto</option>
+                        <option value="portaria" ${f.suggested_type === 'portaria' ? 'selected' : ''}>📄 Portaria</option>
+                        <option value="diario_oficial" ${f.suggested_type === 'diario_oficial' ? 'selected' : ''}>📰 Diário Oficial</option>
+                        <option value="tabela" ${f.suggested_type === 'tabela' ? 'selected' : ''}>📊 Planilha / Tabela</option>
                     </select>
                 </td>
             </tr>
@@ -517,33 +639,35 @@ function renderTable(docs) {
     docs.forEach(doc => {
         const row = document.createElement('tr');
 
-        const date = doc.publication_date || doc.created_at || '-';
+        const date = doc.publication_date || (doc.created_at ? doc.created_at.split('T')[0] : '-');
         let source = 'Upload Manual';
         if (doc.source === 'api_querido_diario' || doc.source === 'official_gazette') source = 'Diário Oficial';
         if (doc.source === 'local_ingest') source = 'Vigilância Local';
 
-        // Mapeamento amigável de tipos
         const typeMap = {
-            'lei': '📜 Lei / Legislação',
-            'denuncia': '📄 Documento (OCR)',
-            'diario': '📰 Diário Oficial',
+            'lei_ordinaria': '📜 Lei Ordinária',
+            'lei_complementar': '📜 Lei Complementar',
+            'constituicao': '⚖️ Constituição',
+            'decreto': '📄 Decreto',
+            'portaria': '📄 Portaria',
+            'diario_oficial': '📰 Diário Oficial',
             'tabela': '📊 Planilha / Tabela'
         };
         const displayType = typeMap[doc.doc_type] || doc.doc_type || '-';
+        const displaySphere = doc.sphere ? doc.sphere.toUpperCase() : '-';
 
-        // Status útil (Ref. Processamento)
-        let statusDisplay = doc.ocr_method || 'Processado';
-        if (statusDisplay === 'direct_pdf') statusDisplay = '📝 PDF Nativo';
-        if (statusDisplay === 'tesseract') statusDisplay = '🔍 OCR (Tesseract)';
-        if (statusDisplay === 'vision_fallback') statusDisplay = '👁️ IA Vision';
-        if (statusDisplay === 'html_law_parser') statusDisplay = '🏛️ HTML Parser';
+        // Status visual
+        let statusBadge = `<span class="badge ${doc.status === 'active' ? 'badge-high' : 'badge-low'}">
+            ${doc.status === 'active' ? 'Ativo' : 'Pendente'}
+        </span>`;
 
         row.innerHTML = `
             <td>${doc.filename}</td>
             <td><span style="font-size:0.8rem; padding:2px 6px; background:#334155; border-radius:4px;">${source}</span></td>
             <td><span style="font-size:0.8rem; color:#a5b4fc;">${displayType}</span></td>
+            <td><span style="font-size:0.8rem;">${displaySphere}</span></td>
             <td>${date}</td>
-            <td><span style="font-size:0.85rem; color:#22c55e;">${statusDisplay}</span></td>
+            <td>${statusBadge}</td>
             <td>
                 <button class="btn danger-sm" onclick="requestDelete('${doc.id}')">Excluir</button>
             </td>

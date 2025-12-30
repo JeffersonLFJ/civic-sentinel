@@ -24,6 +24,7 @@ class GemmaClient:
         images: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
         temperature: float = 0.3,
+        top_k: int = 40,
         json_mode: bool = False
     ) -> Dict[str, Any]:
         """
@@ -34,7 +35,109 @@ class GemmaClient:
             images: List of base64 encoded strings or file paths
             system_prompt: System instruction override
             temperature: Creativity (0.0 to 1.0)
+            top_k: Number of tokens to consider (1-100)
             json_mode: Force JSON output structure
+        """
+        
+        # ... (lines 40-66 omitted for brevity, logic matches)
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        
+        user_msg = {"role": "user", "content": prompt}
+        
+        if images:
+             # Image handling logic same as before...
+             # To save space in replace block, I am repeating the context headers but need to be careful.
+             # Actually I can just target the signature and options block.
+             pass 
+
+        # Let's target the exact signature change and the payload change.
+        # This wrapper tool call might be messy if I try to skip too much.
+        # I'll rewrite the function signature and the payload construction.
+        
+    # Rethinking: I will use a larger block to ensure safety.
+    async def generate_stream(
+        self,
+        prompt: str,
+        images: Optional[List[str]] = None,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        top_k: int = 40,
+        num_ctx: int = 8192
+    ):
+        """
+        Generates completion from Ollama as a stream of tokens.
+        """
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        
+        user_msg = {"role": "user", "content": prompt}
+        
+        if images:
+            processed_images = []
+            for img in images:
+                if not img.startswith("data:"): 
+                    try:
+                        with open(img, "rb") as f:
+                            encoded = base64.b64encode(f.read()).decode("utf-8")
+                            processed_images.append(encoded)
+                    except Exception:
+                        processed_images.append(img)
+                else:
+                    processed_images.append(img)
+            user_msg["images"] = processed_images
+            
+        messages.append(user_msg)
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+                "top_k": top_k,
+                "num_ctx": num_ctx
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    json=payload
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        if "message" in chunk:
+                            yield {
+                                "content": chunk["message"]["content"],
+                                "done": chunk.get("done", False)
+                            }
+            except httpx.ConnectError:
+                logger.error(f"Could not connect to Ollama at {self.base_url}")
+                raise ConnectionError("Ollama service unreachable. Ensure it is running.")
+            except Exception as e:
+                logger.error(f"LLM streaming failed: {str(e)}")
+                raise
+
+    async def generate(
+        self,
+        prompt: str,
+        images: Optional[List[str]] = None,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        top_k: int = 40,
+        num_ctx: int = 8192,
+        json_mode: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Generates completion from Ollama.
         """
         
         messages = []
@@ -47,14 +150,12 @@ class GemmaClient:
         if images:
             processed_images = []
             for img in images:
-                # If path, load and encode
                 if not img.startswith("data:"): 
                     try:
                         with open(img, "rb") as f:
                             encoded = base64.b64encode(f.read()).decode("utf-8")
                             processed_images.append(encoded)
                     except Exception:
-                        # Assume already base64 or invalid, pass as is for API to handle error
                         processed_images.append(img)
                 else:
                     processed_images.append(img)
@@ -69,6 +170,8 @@ class GemmaClient:
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "top_k": top_k,
+                "num_ctx": num_ctx
             }
         }
         

@@ -19,7 +19,9 @@
             </div>
             <nav>
                 <a href="#" id="docsNav" class="active" onclick="showSection('docs')">📄 Documentos</a>
+                <a href="#" id="stagingNav" onclick="showSection('staging')">🛡️ Quarentena</a>
                 <a href="#" id="auditNav" onclick="showSection('audit')">📊 Auditoria & Raio-X</a>
+                <a href="settings.html">⚙️ Configurações</a>
                 <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
                 <a href="inspector.html">🔍 Inspetor de Dados</a>
                 <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
@@ -83,12 +85,44 @@
                                 <th>Arquivo</th>
                                 <th>Fonte</th>
                                 <th>Tipo</th>
-                                <th>Data Publicação</th>
-                                <th>Status (OCR)</th>
+                                <th>Esfera</th>
+                                <th>Data</th>
+                                <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="docsTableBody">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SEÇÃO: QUARENTENA -->
+            <section id="stagingSection" class="hidden">
+                <header>
+                    <h1>Quarentena de Validação 🛡️</h1>
+                    <div class="actions">
+                        <button onclick="approveAllStaging()" class="btn secondary">✅ Aprovar Tudo</button>
+                        <button onclick="fetchStaging()" class="btn primary">🔄 Atualizar</button>
+                    </div>
+                </header>
+                <div class="card warning" style="margin-bottom: 20px;">
+                    <p>⚠️ <strong>Atenção:</strong> Documentos nesta lista ainda não estão no RAG. Valide os metadados e
+                        clique em "Aprovar" para vetorizá-los.</p>
+                </div>
+                <div class="documents-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Arquivo (Clique para Ver)</th>
+                                <th>Tipo Sugerido</th>
+                                <th>Esfera</th>
+                                <th>Data Publicação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stagingTableBody">
                             <!-- Filled by JS -->
                         </tbody>
                     </table>
@@ -149,10 +183,13 @@
                     style="text-align: left; display: block; margin-bottom: 5px;">Tipo de Documento</label>
                 <select id="docType"
                     style="width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 15px; outline: none;">
-                    <option value="lei">Lei / Legislação (HTML)</option>
-                    <option value="denuncia">Documentos (Imagens e PDF)</option>
-                    <option value="diario">Diário Oficial</option>
-                    <option value="tabela">Planilhas / Tabelas (Excel e CSV)</option>
+                    <option value="lei_ordinaria">📜 Lei Ordinária</option>
+                    <option value="lei_complementar">📜 Lei Complementar</option>
+                    <option value="constituicao">⚖️ Constituição</option>
+                    <option value="decreto">📄 Decreto</option>
+                    <option value="portaria">📄 Portaria</option>
+                    <option value="diario_oficial">📰 Diário Oficial</option>
+                    <option value="tabela">📊 Planilha / Tabela</option>
                 </select>
 
                 <div class="file-drop-area">
@@ -211,6 +248,21 @@
         </div>
     </div>
 
+    <!-- Inspection Modal (Full Text) -->
+    <div id="inspectModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 80%; max-width: 900px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 id="inspectTitle">Inspeção de Documento</h3>
+                <button class="btn secondary" onclick="closeInspectModal()">Fechar</button>
+            </div>
+            <div id="inspectTextBody"
+                style="flex: 1; background: #0f172a; padding: 20px; border-radius: 6px; overflow-y: auto; color: #e2e8f0; font-family: 'Inter', sans-serif; line-height: 1.6; white-space: pre-wrap; border: 1px solid #334155;">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
+
 
     <div id="logsModal" class="modal hidden">
         <div class="modal-content"
@@ -246,10 +298,12 @@
                 <select id="bulkDocType"
                     style="background: #1e293b; border: 1px solid #334155; color: white; padding: 5px; border-radius: 4px; font-size: 0.85rem;">
                     <option value="">-- Selecione --</option>
-                    <option value="lei">Lei / Legislação (HTML)</option>
-                    <option value="denuncia">Documentos (Imagens e PDF)</option>
-                    <option value="tabela">Planilhas / Tabelas</option>
-                    <option value="diario">Diário Oficial</option>
+                    <option value="lei_ordinaria">📜 Lei Ordinária</option>
+                    <option value="constituicao">⚖️ Constituição</option>
+                    <option value="decreto">📄 Decreto</option>
+                    <option value="portaria">📄 Portaria</option>
+                    <option value="diario_oficial">📰 Diário Oficial</option>
+                    <option value="tabela">📊 Planilha / Tabela</option>
                 </select>
                 <button class="btn secondary" style="padding: 5px 10px; font-size: 0.85rem;"
                     onclick="applyBulkType()">Aplicar Selecionados</button>

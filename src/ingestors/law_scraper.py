@@ -136,10 +136,37 @@ class LawScraper:
                     for k, v in current_hierarchy.items():
                         if v: meta[k] = v
                         
-                    structured_chunks.append({
-                        "text": clean_part,
-                        "metadata": meta
-                    })
+                    if len(clean_part) > 2500:
+                        # Safety: Article is too big (e.g. > 1 token window or reranker limit)
+                        # We must sub-split it while keeping metadata
+                        from src.utils.text_processing import text_splitter
+                        
+                        # Extract header (e.g. "Art. 5º") to prepend to children
+                        header_match = re.match(r"(Art\.\s*[\d\wº]+)", clean_part)
+                        header = header_match.group(1) if header_match else "Art. (Cont.)"
+                        
+                        # Use simple paragraph split
+                        sub_parts = text_splitter.split_by_paragraphs(clean_part, max_chars=2000)
+                        
+                        for i, part in enumerate(sub_parts):
+                            sub_meta = meta.copy()
+                            sub_meta["chunk_type"] = "article_part"
+                            sub_meta["part_index"] = i
+                            
+                            # Ensure header context in text if missing (except first usually has it)
+                            final_text = part
+                            if i > 0:
+                                final_text = f"{header} (Cont.) {part}"
+                                
+                            structured_chunks.append({
+                                "text": final_text,
+                                "metadata": sub_meta
+                            })
+                    else:
+                        structured_chunks.append({
+                            "text": clean_part,
+                            "metadata": meta
+                        })
         else:
             logger.warning("⚠️ Nenhum padrão detectado. Usando split simples.")
             structured_chunks = [{

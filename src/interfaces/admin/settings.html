@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela Admin - Configurações</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Toast Notification */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #3b82f6;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 16px;
+            position: fixed;
+            z-index: 9999;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.3s, bottom 0.3s;
+        }
+
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 50px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .settings-card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .settings-card h3 {
+            margin-bottom: 20px;
+            color: #fff;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .form-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        .form-group .value-display {
+            float: right;
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .form-group input[type="number"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        .danger-zone {
+            border: 1px solid #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .danger-zone h3 {
+            color: #ef4444;
+            border-color: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Parametrização</span>
+            </div>
+            <nav>
+                <a href="index.html">📄 Documentos</a>
+                <a href="index.html#audit">📊 Auditoria</a>
+                <a href="settings.html" class="active">⚙️ Configurações</a>
+                <a href="inspector.html">🔍 Inspetor</a>
+                <a href="chat.html" target="_blank">💬 Chat</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header>
+                <h1>Painel de Controle Cognitivo</h1>
+                <div class="actions">
+                    <button onclick="saveSettings()" class="btn primary">💾 Salvar Alterações</button>
+                </div>
+            </header>
+
+            <div class="settings-grid">
+
+                <!-- 1. Cérebro LLM -->
+                <div class="settings-card">
+                    <h3>🧠 Modelo de Linguagem</h3>
+
+                    <div class="form-group">
+                        <label>Temperatura (Criatividade) <span id="tempVal" class="value-display">0.1</span></label>
+                        <input type="range" id="llm_temperature" min="0" max="1" step="0.1"
+                            oninput="document.getElementById('tempVal').innerText = this.value">
+                        <small style="color: #64748b;">0.0 = Robótico/Preciso | 1.0 = Criativo/Instável</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Context Window (Tokens)</label>
+                        <select id="llm_num_ctx">
+                            <option value="4096">4096 (Rápido, Contexto Custo)</option>
+                            <option value="8192">8192 (Padrão Equilibrado)</option>
+                            <option value="16384">16384 (Memória Longa, Mais Lento)</option>
+                            <option value="32768">32768 (Extremo)</option>
+                        </select>
+                        <small style="color: #64748b;">Tamanho da "memória de trabalho" ativa do modelo.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>LLM Sampling (Generation Top-K)</label>
+                        <input type="number" id="llm_top_k" min="1" max="100">
+                        <small style="color: #64748b;">Diversidade de vocabulário na geração de resposta.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Prompt de Intenção (Interpretador)</label>
+                        <textarea id="intent_prompt" rows="6"
+                            placeholder="Prompt técnico para extração de intenção..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Prompt de Sistema (System Persona)</label>
+                        <textarea id="system_prompt" rows="6"
+                            placeholder="O padrão do arquivo será usado se vazio..."></textarea>
+                        <button onclick="resetPrompt()" class="btn secondary" style="margin-top:5px; width:100%;">↺
+                            Restaurar Padrão de Fábrica</button>
+                    </div>
+                </div>
+
+                <!-- 2. Decisão & Memória -->
+                <div class="settings-card">
+                    <h3>⚖️ Motor de Decisão e Busca</h3>
+
+                    <div class="form-group">
+                        <label>RAG Retrieval Count (Top-K Docs) <span id="ragVal" class="value-display">5</span></label>
+                        <input type="range" id="rag_top_k" min="1" max="20" step="1"
+                            oninput="document.getElementById('ragVal').innerText = this.value">
+                        <small style="color: #64748b;">Quantos documentos o RAG recupera do banco para ler.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Limiar de Escuta Ativa (Ambiguity) <span id="listeningVal"
+                                class="value-display">0.8</span></label>
+                        <input type="range" id="active_listening_threshold" min="0.1" max="1.0" step="0.1"
+                            oninput="document.getElementById('listeningVal').innerText = this.value">
+                        <small style="color: #64748b;">Acima disso, o sistema pergunta antes de buscar.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Min Relevance Score (Reranker) <span id="relevanceVal"
+                                class="value-display">0.4</span></label>
+                        <input type="range" id="min_relevance_score" min="0.1" max="1.0" step="0.05"
+                            oninput="document.getElementById('relevanceVal').innerText = this.value">
+                        <small style="color: #64748b;">Documentos abaixo dessa nota são descartados.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Histórico de Mensagens (Steps)</label>
+                        <input type="number" id="context_window_size" readonly style="opacity: 0.5;">
+                        <small style="color: #64748b;">Fixo em 20 interações.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>OCR Vision Fallback (Confidence) <span id="ocrVal"
+                                class="value-display">80</span></label>
+                        <input type="range" id="ocr_validation_threshold" min="0" max="100" step="5"
+                            oninput="document.getElementById('ocrVal').innerText = this.value">
+                        <small style="color: #64748b;">Se a confiança do Tesseract for menor que isso, a Visão do Gemma3
+                            é ativada.</small>
+                    </div>
+                </div>
+
+                <!-- 3. Zona de Perigo -->
+                <div class="settings-card danger-zone" style="grid-column: 1 / -1;">
+                    <h3>🚨 Zona de Perigo (Sistema)</h3>
+                    <p style="color: #cbd5e1; margin-bottom: 15px;">Ações destrutivas. Use com cautela.</p>
+
+                    <button onclick="confirmPurge()" class="btn danger">🗑️ Purgar Cache Vetorial (Reset
+                        ChromaDB)</button>
+                    <small style="margin-left: 10px; color: #f87171;">Apaga SOMENTE os índices vetoriais. O banco de
+                        dados (SQLite) permanece intacto.</small>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast">Configuração Salva!</div>
+
+    <!-- Script de Lógica -->
+    <script>
+        const API_BASE = '/api/admin';
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.style.backgroundColor = isError ? "#ef4444" : "#3b82f6";
+            toast.className = "show";
+            setTimeout(function () { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        // Initialize Settings
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch(`${API_BASE}/settings`);
+                const data = await res.json();
+
+                // Populate Fields
+                document.getElementById('llm_temperature').value = data.llm_temperature;
+                document.getElementById('tempVal').innerText = data.llm_temperature;
+
+                document.getElementById('llm_top_k').value = data.llm_top_k; // Gen Top-K
+
+                // Try catch for new fields if not exist yet
+                if (data.llm_num_ctx) document.getElementById('llm_num_ctx').value = data.llm_num_ctx;
+                if (data.rag_top_k) {
+                    document.getElementById('rag_top_k').value = data.rag_top_k;
+                    document.getElementById('ragVal').innerText = data.rag_top_k;
+                }
+
+                document.getElementById('system_prompt').value = data.system_prompt;
+                document.getElementById('intent_prompt').value = data.intent_prompt;
+
+                document.getElementById('active_listening_threshold').value = data.active_listening_threshold;
+                document.getElementById('listeningVal').innerText = data.active_listening_threshold;
+
+                document.getElementById('min_relevance_score').value = data.min_relevance_score;
+                document.getElementById('relevanceVal').innerText = data.min_relevance_score;
+
+                document.getElementById('context_window_size').value = data.context_window_size;
+
+                if (data.ocr_validation_threshold) {
+                    document.getElementById('ocr_validation_threshold').value = data.ocr_validation_threshold;
+                    document.getElementById('ocrVal').innerText = data.ocr_validation_threshold;
+                }
+
+            } catch (e) {
+                console.error("Erro ao carregar configurações: " + e);
+                showToast("Erro ao carregar dados.", true);
+            }
+        });
+
+        async function saveSettings() {
+            const payload = {
+                llm_temperature: parseFloat(document.getElementById('llm_temperature').value),
+                llm_top_k: parseInt(document.getElementById('llm_top_k').value),
+                llm_num_ctx: parseInt(document.getElementById('llm_num_ctx').value),
+                rag_top_k: parseInt(document.getElementById('rag_top_k').value),
+
+                system_prompt: document.getElementById('system_prompt').value,
+                intent_prompt: document.getElementById('intent_prompt').value,
+                active_listening_threshold: parseFloat(document.getElementById('active_listening_threshold').value),
+                min_relevance_score: parseFloat(document.getElementById('min_relevance_score').value),
+                ocr_validation_threshold: parseFloat(document.getElementById('ocr_validation_threshold').value),
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const resp = await res.json();
+                if (resp.status === 'success') {
+                    showToast('✅ Configurações salvas e aplicadas!');
+                } else {
+                    showToast('Erro: ' + resp.detail, true);
+                }
+            } catch (e) {
+                showToast("Erro ao salvar: " + e, true);
+            }
+        }
+
+        async function resetPrompt() {
+            if (!confirm("Tem certeza? O System Prompt será revertido para o padrão do código.")) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/settings/reset_prompt`, { method: 'POST' });
+                const resp = await res.json();
+                if (resp.status === 'success') {
+                    document.getElementById('system_prompt').value = "";
+                    showToast('Prompt resetado com sucesso.');
+                }
+            } catch (e) { showToast(e, true); }
+        }
+
+        async function confirmPurge() {
+            const code = prompt("🚨 ATENÇÃO: Isso desconectará a memória vetorial dos documentos. Para confirmar, digite 'DELETAR':");
+            if (code === 'DELETAR') {
+                try {
+                    const res = await fetch(`${API_BASE}/settings/purge_cache`, { method: 'POST' });
+                    const resp = await res.json();
+                    showToast(resp.message);
+                } catch (e) { showToast(e, true); }
+            }
+        }
+    </script>
+</body>
+
+</html>

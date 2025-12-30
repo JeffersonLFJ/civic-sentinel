@@ -33,3 +33,4 @@ venv/
 # Project specific
 data/
 logs/
+server.log

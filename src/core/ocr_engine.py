@@ -27,8 +27,13 @@ class OCREngine:
         # self.paddle = ...
         # self.doctr = ...
         
-        self.MIN_CONFIDENCE = settings.OCR_MIN_CONFIDENCE
-        self.VALIDATION_THRESHOLD = settings.OCR_VALIDATION_THRESHOLD
+        # self.MIN_CONFIDENCE = settings.OCR_MIN_CONFIDENCE # Legacy
+        # self.VALIDATION_THRESHOLD = settings.OCR_VALIDATION_THRESHOLD # Legacy
+        
+    @property
+    def validation_threshold(self) -> float:
+        from src.core.settings_manager import settings_manager
+        return settings_manager.ocr_validation_threshold
 
     async def process_document(
         self, 
@@ -96,7 +101,7 @@ class OCREngine:
 
             # 3. Validation / Fallback logic for Documents
             # Only trigger fallback if confidence is low AND we haven't already used Vision
-            if enable_validation and ocr_result["confidence"] < self.VALIDATION_THRESHOLD:
+            if enable_validation and ocr_result["confidence"] < self.validation_threshold:
                 logger.info(f"Low confidence ({ocr_result['confidence']}). Triggering Gemma Vision fallback.")
                 try:
                     # Use LLM Vision to extract text
@@ -184,7 +189,9 @@ class OCREngine:
                 with open(file_path, 'rb') as f:
                     pdf = PyPDF2.PdfReader(f)
                     for page in pdf.pages:
-                        text += page.extract_text() + "\n"
+                        extracted = page.extract_text()
+                        if extracted:
+                            text += extracted + "\n\f\n" # \f is Form Feed (Page Break)
                 return {
                     "text": text,
                     "confidence": 100.0,

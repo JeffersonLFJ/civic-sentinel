@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela Admin - Quarentena</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Toast Notification */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #3b82f6;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 16px;
+            position: fixed;
+            z-index: 9999;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.3s, bottom 0.3s;
+        }
+
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 50px;
+        }
+
+        /* Staging List */
+        .doc-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .doc-item {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .doc-info h3 {
+            margin: 0 0 5px 0;
+            color: #fff;
+            font-size: 1.1rem;
+        }
+
+        .doc-info p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: #0f172a;
+            margin: 5% auto;
+            padding: 25px;
+            border: 1px solid #334155;
+            width: 80%;
+            max-width: 900px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #fff;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+
+        .review-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .text-preview {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            height: 400px;
+            overflow-y: auto;
+            color: #cbd5e1;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+        }
+
+        .metadata-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn.primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn.primary:hover {
+            background: #2563eb;
+        }
+
+        .btn.secondary {
+            background: #475569;
+            color: white;
+        }
+
+        .btn.secondary:hover {
+            background: #334155;
+        }
+
+        .approve-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #334155;
+            text-align: right;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #64748b;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Quarentena</span>
+            </div>
+            <nav>
+                <a href="index.html">📄 Documentos</a>
+                <a href="staging.html" class="active">🚧 Quarentena</a>
+                <a href="index.html#audit">📊 Auditoria</a>
+                <a href="settings.html">⚙️ Configurações</a>
+                <a href="inspector.html">🔍 Inspetor</a>
+                <a href="chat.html" target="_blank">💬 Chat</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header>
+                <h1>Staging Area (Quarentena)</h1>
+                <p>Valide os metadados antes de indexar no Cérebro.</p>
+            </header>
+
+            <div id="stagingList" class="doc-list">
+                <!-- Items injected here -->
+                <div class="empty-state">Carregando documentos pendentes...</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Review Modal -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Revisar Documento</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+
+            <div class="review-grid">
+                <!-- Left: Text Preview -->
+                <div>
+                    <label style="color:#94a3b8; display:block; margin-bottom:5px;">Pré-visualização do Texto
+                        (OCR)</label>
+                    <div id="textPreview" class="text-preview">Carregando texto...</div>
+                </div>
+
+                <!-- Right: Metadata Form -->
+                <div class="metadata-form">
+                    <div class="form-group">
+                        <label>Esfera (Competência)</label>
+                        <select id="metaSphere">
+                            <option value="">Selecione...</option>
+                            <option value="municipal">Municipal (Prioridade Local)</option>
+                            <option value="estadual">Estadual</option>
+                            <option value="federal">Federal</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tipo de Norma (Hierarquia)</label>
+                        <select id="metaType">
+                            <option value="lei_complementar">Lei Complementar</option>
+                            <option value="lei_ordinaria">Lei Ordinária</option>
+                            <option value="decreto">Decreto</option>
+                            <option value="portaria">Portaria</option>
+                            <option value="resolucao">Resolução</option>
+                            <option value="constituicao">Constituição / Emenda</option>
+                            <option value="outros">Outros</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Data de Publicação (Temporalidade)</label>
+                        <input type="date" id="metaDate">
+                    </div>
+
+                    <div class="approve-section">
+                        <button onclick="approveDocument()" class="btn primary" style="width:100%">
+                            ✅ Aprovar & Indexar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast">Ação concluída!</div>
+
+    <script>
+        const API_BASE = '/api/admin';
+        let currentDocId = null;
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.style.backgroundColor = isError ? "#ef4444" : "#3b82f6";
+            toast.className = "show";
+            setTimeout(function () { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        async function loadStaging() {
+            try {
+                const res = await fetch(`${API_BASE}/staging`);
+                const data = await res.json();
+                renderList(data.documents);
+            } catch (e) {
+                console.error(e);
+                showToast("Erro ao carregar lista.", true);
+            }
+        }
+
+        function renderList(docs) {
+            const container = document.getElementById('stagingList');
+            container.innerHTML = '';
+
+            if (!docs || docs.length === 0) {
+                container.innerHTML = '<div class="empty-state">Nenhum documento na quarentena. Tudo limpo! 🧹</div>';
+                return;
+            }
+
+            docs.forEach(doc => {
+                const item = document.createElement('div');
+                item.className = 'doc-item';
+                item.innerHTML = `
+                    <div class="doc-info">
+                        <h3>${doc.filename}</h3>
+                        <p>ID: ${doc.id} | Criado em: ${doc.created_at}</p>
+                    </div>
+                    <button onclick="openReview('${doc.id}', '${doc.filename}')" class="btn secondary">Revisar 🔍</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function openReview(id, filename) {
+            currentDocId = id;
+            document.getElementById('modalTitle').innerText = filename;
+            document.getElementById('reviewModal').style.display = 'block';
+            document.getElementById('textPreview').innerText = "Carregando texto...";
+
+            // Reset Form
+            document.getElementById('metaSphere').value = "";
+            document.getElementById('metaType').value = "outros";
+            document.getElementById('metaDate').value = "";
+
+            try {
+                const res = await fetch(`${API_BASE}/staging/${id}/text`);
+                const data = await res.json();
+                document.getElementById('textPreview').innerText = data.text.substring(0, 5000) + (data.text.length > 5000 ? "\n... (truncado)" : "");
+            } catch (e) {
+                document.getElementById('textPreview').innerText = "Erro ao carregar texto.";
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('reviewModal').style.display = 'none';
+            currentDocId = null;
+        }
+
+        async function approveDocument() {
+            if (!currentDocId) return;
+
+            const sphere = document.getElementById('metaSphere').value;
+            const docType = document.getElementById('metaType').value;
+            const pubDate = document.getElementById('metaDate').value;
+
+            if (!sphere || !docType || !pubDate) {
+                alert("Por favor, preencha todos os metadados obrigatórios (Esfera, Tipo e Data) para garantir a governança.");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/staging/${currentDocId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sphere: sphere,
+                        doc_type: docType,
+                        publication_date: pubDate
+                    })
+                });
+                const resp = await res.json();
+
+                if (resp.status === 'success') {
+                    showToast("Documento Aprovado!");
+                    closeModal();
+                    loadStaging(); // Refresh list
+                } else {
+                    showToast("Erro: " + resp.detail, true);
+                }
+            } catch (e) {
+                showToast("Erro ao aprovar: " + e, true);
+            }
+        }
+
+        // Close modal if clicked outside
+        window.onclick = function (event) {
+            const modal = document.getElementById('reviewModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadStaging);
+    </script>
+</body>
+
+</html>

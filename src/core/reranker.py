@@ -51,6 +51,9 @@ class Reranker:
         # Predict scores
         scores = model.predict(pairs)
         
+        # Apply Sigmoid to normalize logits to 0-1 probability
+        scores = torch.sigmoid(torch.tensor(scores)).numpy()
+        
         # Sort by score descending
         # Zip with original index to keep track
         scored_results = []

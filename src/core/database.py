@@ -2,7 +2,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 import aiosqlite
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from src.config import settings
 
 # Logger setup
@@ -43,10 +43,69 @@ class DatabaseManager:
             self._sqlite_connection = await aiosqlite.connect(settings.SQLITE_DB_PATH)
             self._sqlite_connection.row_factory = aiosqlite.Row
             
+            # Optimization: Enable WAL mode for better concurrency
+            await self._sqlite_connection.execute("PRAGMA journal_mode=WAL")
+            
+            # Enforce Foreign Keys
+            await self._sqlite_connection.execute("PRAGMA foreign_keys = ON")
+            
             # Initialize schema if needed
             await self._init_sqlite_schema()
             
         return self._sqlite_connection
+
+    # ... (skipping unchanged _init_sqlite_schema codes) ...
+
+    async def delete_document(self, doc_id: str) -> bool:
+        """
+        Deletes document from SQLite and VectorDB atomically.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        try:
+            # 1. Delete from SQLite (Transactions)
+            async with self._sqlite_connection.cursor() as cursor:
+                # Delete from FTS first (Virtual table)
+                await cursor.execute("DELETE FROM documents_fts WHERE id = ?", (doc_id,))
+                
+                # Delete from Main Table
+                # With PRAGMA foreign_keys = ON, this SHOULD cascade to doc_parents.
+                # But let's be paranoid and explicit for robustness.
+                await cursor.execute("DELETE FROM doc_parents WHERE doc_id = ?", (doc_id,))
+                await cursor.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+                
+                deleted_count = cursor.rowcount
+            
+            await self._sqlite_connection.commit()
+            
+            if deleted_count == 0:
+                logger.warning(f"Document {doc_id} not found in SQLite to delete.")
+            
+            # 2. Delete from ChromaDB
+            collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+            try:
+                collection.delete(where={"original_doc_id": doc_id})
+                logger.info(f"Vectors for {doc_id} deleted from ChromaDB.")
+            except Exception as e:
+                logger.error(f"Chroma metadata delete failed: {e}. Trying ID fallback.")
+                # Fallback range delete
+                potential_ids = [f"{doc_id}_micro_{i}" for i in range(2000)]
+                collection.delete(ids=potential_ids)
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Atomic Delete failed for {doc_id}: {e}")
+            return False
+
+    async def close(self):
+        """
+        Closes connections.
+        """
+        if self._sqlite_connection: 
+            await self._sqlite_connection.close()
+            self._sqlite_connection = None
 
     async def _init_sqlite_schema(self):
         """
@@ -84,7 +143,22 @@ class DatabaseManager:
             ocr_method TEXT,
             url TEXT, -- Source URL for citations (e.g. Querido Diário)
             publication_date DATE, -- Official publication date
+            doc_type TEXT DEFAULT 'generico', -- 'lei', 'diario_oficial', 'tabela'
+            sphere TEXT DEFAULT 'unknown', -- 'federal', 'estadual', 'municipal'
+            status TEXT DEFAULT 'active', -- 'active' or 'pending' (staging)
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        query_parents = """
+        CREATE TABLE IF NOT EXISTS doc_parents (
+            id TEXT PRIMARY KEY, -- doc_id + "_" + parent_index
+            doc_id TEXT NOT NULL,
+            text_content TEXT NOT NULL,
+            parent_type TEXT, -- 'page', 'article', 'act', 'table_page'
+            parent_index INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(doc_id) REFERENCES documents(id) ON DELETE CASCADE
         );
         """
         
@@ -92,6 +166,7 @@ class DatabaseManager:
             await cursor.execute(query_audit)
             await cursor.execute(query_users)
             await cursor.execute(query_docs)
+            await cursor.execute(query_parents)
             
             # FTS5 Virtual Table for Keyword Search
             query_fts = """
@@ -106,7 +181,6 @@ class DatabaseManager:
             await cursor.execute(query_fts)
             
             # FTS Backfill Migration
-            # Check if FTS is empty but documents has data
             try:
                 await cursor.execute("SELECT COUNT(*) FROM documents_fts")
                 count_fts = (await cursor.fetchone())[0]
@@ -124,31 +198,27 @@ class DatabaseManager:
             except Exception as e:
                 logger.warning(f"⚠️ Falha na verificação/migração FTS: {e}")
             
-            # Migration: Check if url column exists, if not add it (simple migration for dev)
-            # ... (omitted standard migrations)
-            # In a real app we would use alembic
+            # Standard migrations (Alembick-less)
+            migrations = [
+                ("ALTER TABLE documents ADD COLUMN url TEXT", "url"),
+                ("ALTER TABLE documents ADD COLUMN publication_date DATE", "publication_date"),
+                ("ALTER TABLE documents ADD COLUMN doc_type TEXT DEFAULT 'generico'", "doc_type"),
+                ("ALTER TABLE documents ADD COLUMN sphere TEXT DEFAULT 'unknown'", "sphere"),
+                ("ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'active'", "status"),
+                ("ALTER TABLE audit_logs ADD COLUMN query TEXT", "query"),
+                ("ALTER TABLE audit_logs ADD COLUMN response TEXT", "response"),
+                ("ALTER TABLE audit_logs ADD COLUMN sources_json TEXT", "sources_json")
+            ]
+            
+            for m_sql, col_name in migrations:
+                try:
+                    await cursor.execute(m_sql)
+                except Exception:
+                    pass # Column exists or table newly created
+            
+            # Drop obsolete column
             try:
-                await cursor.execute("ALTER TABLE documents ADD COLUMN url TEXT")
-            except Exception:
-                pass # Column likely exists or table just created
-                
-            try:
-                await cursor.execute("ALTER TABLE documents ADD COLUMN publication_date DATE")
-            except Exception:
-                pass
-
-            try:
-                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN query TEXT")
-            except Exception:
-                pass
-
-            try:
-                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN response TEXT")
-            except Exception:
-                pass
-
-            try:
-                await cursor.execute("ALTER TABLE audit_logs ADD COLUMN sources_json TEXT")
+                await cursor.execute("ALTER TABLE documents DROP COLUMN urgency_level")
             except Exception:
                 pass
 
@@ -165,6 +235,7 @@ class DatabaseManager:
             "INSERT OR IGNORE INTO users (id) VALUES (?)", (user_hash,)
         ) as cursor:
             await self._sqlite_connection.commit()
+
     async def log_audit(self, action: str, user_hash: str, details: str = None, query_text: str = None, response_text: str = None, sources_json: str = None, confidence_score: float = None):
         """
         Logs an action to the audit trail with support for detailed RAG inspection.
@@ -205,32 +276,32 @@ class DatabaseManager:
             await self.get_sqlite()
             
         import uuid
-        doc_id = str(uuid.uuid4())
+        doc_id = doc_data.get("id") or str(uuid.uuid4())
         
         query = """
         INSERT INTO documents (
-            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type
+            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type, sphere, status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         params = (
             doc_id,
             doc_data["filename"],
             doc_data["source"],
-            doc_data.get("storage_path"), # None if deleted
+            doc_data.get("storage_path"), 
             doc_data["text_content"],
-            doc_data["ocr_method"],
+            doc_data.get("ocr_method", "manual"),
             doc_data.get("url"),
             doc_data.get("publication_date"),
-            doc_data.get("doc_type", "generico")
+            doc_data.get("doc_type", "generico"),
+            doc_data.get("sphere", "unknown"),
+            doc_data.get("status", "active")
         )
         
-        # 1. Insert into main table
         async with self._sqlite_connection.execute(query, params) as cursor:
-            pass # Transaction managed at connection level? aiosqlite usually commits on connection.commit()
+            pass 
             
-        # 2. Insert into FTS (separate execute to avoid cursor mixup)
         if doc_data.get("text_content"):
             await self._sqlite_connection.execute(
                 "INSERT INTO documents_fts (id, text_content, filename, source) VALUES (?, ?, ?, ?)",
@@ -240,46 +311,48 @@ class DatabaseManager:
         await self._sqlite_connection.commit()
         return doc_id
             
-    async def search_documents_keyword(self, query_text: str, limit: int = 5) -> list[dict]:
+    async def search_documents_keyword(self, query_text: str, limit: int = 5, sphere: str = None) -> list[dict]:
         """
         BM25-like search using SQLite FTS5.
         """
         if not self._sqlite_connection:
             await self.get_sqlite()
             
-        # Parametrized query for FTS is slightly tricky in SQLite, usually requires substitution or specific syntax
-        # FTS5 query syntax: match 'phrase'
-        # Safety: We should sanitize input slightly to prevent FTS syntax errors (like unmatched quotes)
         safe_query = query_text.replace("'", "''").replace('"', '""')
         
-        # Simple match query
+        # Se houver esfera, filtramos cruzando com a tabela principal
         sql = f"""
-        SELECT id, text_content, filename, source, rank 
-        FROM documents_fts 
-        WHERE documents_fts MATCH ? 
-        ORDER BY rank 
-        LIMIT ?
+        SELECT f.id, f.text_content, f.filename, f.source, f.rank, d.sphere, d.publication_date, d.doc_type
+        FROM documents_fts f
+        JOIN documents d ON f.id = d.id
+        WHERE f.text_content MATCH ? 
+        AND d.status = 'active'
         """
         
+        params = [safe_query]
+        if sphere:
+            sql += " AND d.sphere = ?"
+            params.append(sphere)
+            
+        sql += " ORDER BY f.rank LIMIT ?"
+        params.append(limit)
+        
         try:
-            async with self._sqlite_connection.execute(sql, (safe_query, limit)) as cursor:
+            async with self._sqlite_connection.execute(sql, params) as cursor:
                 rows = await cursor.fetchall()
                 results = []
                 for row in rows:
-                    # Map to compatible format with vector search result
                     results.append({
-                        "content": row["text_content"], # This returns FULL content, might be heavy. FTS supports snippets.
-                        # For Reranking, full content is okay if we chunk it later, but our documents_fts has full doc?
-                        # ACTUALLY: FTS on full documents is bad for retrieval context.
-                        # We usually want chunks.
-                        # BUT: The requirement mimics keyword search on LEGISLATION (e.g. "Lei 8666").
-                        # Finding the document is good.
+                        "content": row["text_content"],
                         "metadata": {
                             "filename": row["filename"],
                             "source": row["source"],
-                            "doc_id": row["id"]
+                            "doc_id": row["id"],
+                            "sphere": row["sphere"],
+                            "publication_date": row["publication_date"],
+                            "doc_type": row["doc_type"]
                         },
-                        "score": 0.5 # Placeholder score for keyword match
+                        "score": 0.5 
                     })
                 return results
         except Exception as e:
@@ -287,105 +360,179 @@ class DatabaseManager:
             return []
     async def index_pre_chunked_data(self, doc_id: str, chunks: List[Dict], base_metadata: dict):
         """
-        Indexes pre-calculated chunks (e.g. from HtmlLawIngestor) directly into ChromaDB.
+        Indexes pre-calculated chunks (e.g. from HtmlLawIngestor or TableSplitter).
+        TREATED AS MACRO CHUNKS (Parents).
+        1. Save 'chunk' as Parent.
+        2. Split 'chunk' into Micros -> Chroma.
         """
+        from src.utils.text_processing import text_splitter
+        
         collection = self.chroma_client.get_or_create_collection("sentinela_documents")
             
         ids = []
         documents = []
         metadatas = []
         
-        for i, chunk in enumerate(chunks):
-            chunk_id = f"{doc_id}_chunk_{i}"
+        total_parents = len(chunks)
+        total_micros = 0
+        
+        doc_type = base_metadata.get("doc_type", "general")
+        parent_type = "generic_macro"
+        if doc_type == "tabela":
+             parent_type = "table_page"
+        elif doc_type == "lei" or doc_type == "legislation":
+             parent_type = "article"
+        
+        for p_idx, chunk in enumerate(chunks):
+            # A. Save Parent
+            parent_text = chunk["text"]
+            # Save parent_chunk expects (doc_id, index, text, type)
+            parent_id = await self.save_parent_chunk(doc_id, p_idx, parent_text, parent_type)
             
-            # Merit metadata
-            meta = base_metadata.copy()
-            meta.update(chunk.get("metadata", {}))
-            meta["original_doc_id"] = doc_id # Consolidated key for inspector
-            meta["chunk_index"] = i
-            
-            ids.append(chunk_id)
-            documents.append(chunk["text"])
-            metadatas.append(meta)
+            # B. Split Micro
+            micro_chunks = []
+            if doc_type == "tabela":
+                # Split 50-row MD table into 5-row MD tables
+                micro_chunks = text_splitter.split_markdown_table(parent_text, chunk_rows=5)
+            elif doc_type == "legislation" or doc_type == "lei":
+                # Split Article into Paragraphs
+                micro_chunks = text_splitter.split_by_paragraphs(parent_text)
+            else:
+                # Default fallback (should not happen often for pre-chunked unless manual)
+                micro_chunks = text_splitter.split_semantically(parent_text)
+                
+            if not micro_chunks:
+                 micro_chunks = [parent_text]
+
+            # C. Accumulate Micros
+            for m_idx, m_text in enumerate(micro_chunks):
+                chunk_id = f"{parent_id}_micro_{m_idx}"
+                
+                # Merit metadata
+                meta = base_metadata.copy()
+                meta.update(chunk.get("metadata", {})) # Specific chunk metadata
+                meta["original_doc_id"] = doc_id
+                meta["parent_id"] = parent_id
+                meta["parent_index"] = p_idx
+                meta["chunk_index"] = m_idx 
+                meta["parent_type"] = parent_type
+                
+                ids.append(chunk_id)
+                documents.append(m_text)
+                metadatas.append(meta)
             
         if ids:
-            collection.add(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas
-            )
-            logger.info(f"Indexed {len(ids)} structured chunks for {doc_id}")
+            try:
+                collection.add(
+                    ids=ids,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                logger.info(f"Indexed {len(ids)} micro chunks (from {total_parents} parents) for {doc_id}")
+            except Exception as e:
+                logger.error(f"Failed to index structured micros: {e}")
 
     async def index_document_text(self, doc_id: str, text: str, metadata: dict):
         """
-        Standard indexing for raw text (OCR or plain text).
-        Splits text into chunks and saves to ChromaDB.
+        Standard indexing for raw text (OCR or plain text) with Parent Retrieval.
+        1. Splits into MACRO chunks (Parents) -> SQLite.
+        2. Splits MACRO into MICRO chunks (Children) -> ChromaDB.
         """
         if not text:
             return
 
         from src.utils.text_processing import text_splitter
         
-        # Determine strategy based on source or explicitly if we had doc_type in metadata
-        # Mappings: 
-        # official_gazette -> diario_oficial
-        # legislation -> legislation (if we had this source, for now logic defaults)
-        
         doc_type = "general"
         source = metadata.get("source", "")
         filename = metadata.get("filename", "").lower()
         meta_doc_type = metadata.get("doc_type", "")
         
-        if source == "official_gazette":
+        if source == "official_gazette" or meta_doc_type == "diario_oficial" or "diario" in filename:
             doc_type = "diario_oficial"
         elif meta_doc_type == "lei" or "lei" in filename or "decreto" in filename:
              doc_type = "legislation"
-        elif meta_doc_type: # Trust other types
+        elif meta_doc_type:
              doc_type = meta_doc_type
-            
-        # 2. Split (Without Header, as requested)
-        logger.info(f"🔍 Fragmentando texto em blocos para indexação...")
-        chunks = text_splitter.split(text, doc_type=doc_type, context_prefix="")
+             
+        # 1. Macro Splitting (Defining Parents)
+        logger.info(f"🔍 Fragmentando MACRO chunks para {doc_id} (Tipo: {doc_type})...")
+        macro_chunks = []
         
-        if not chunks:
-            logger.warning("⚠️ Nenhum chunk gerado após fragmentação.")
-            return
+        if doc_type == "legislation":
+            # Uses regex for Articles
+            macro_chunks = text_splitter.split_by_law_articles(text)
+            parent_type = "article"
+        elif doc_type == "diario_oficial":
+            # Uses regex for Acts
+            macro_chunks = text_splitter.split_legal_acts(text)
+            parent_type = "act"
+        else:
+            # General / PDF -> Physical Pages
+            # We assume text has \f markers if from our optimized OCR
+            macro_chunks = text_splitter.split_pages(text)
+            parent_type = "page"
+
+        if not macro_chunks:
+            logger.warning("⚠️ Nenhum Macro-Chunk gerado. Tratando texto inteiro como único pai.")
+            macro_chunks = [text]
 
         collection = self.chroma_client.get_or_create_collection("sentinela_documents")
         
-        # Batch processing (50 chunks per batch to prevent timeouts)
-        batch_size = 50
-        total_chunks = len(chunks)
+        total_parents = len(macro_chunks)
+        total_micros_indexed = 0
         
-        logger.info(f"🧠 Iniciando indexação vetorial: {total_chunks} fragmentos detectados.")
-        
-        for i in range(0, total_chunks, batch_size):
-            end_idx = min(i + batch_size, total_chunks)
-            batch_chunks = chunks[i:end_idx]
+        # 2. Process Each Parent
+        for p_idx, parent_text in enumerate(macro_chunks):
+            # A. Save Parent to SQLite
+            parent_id = await self.save_parent_chunk(doc_id, p_idx, parent_text, parent_type)
             
-            # Generate IDs for this batch
-            batch_ids = [f"{doc_id}_{k}" for k in range(i, end_idx)]
+            # B. Split into Micros (Children)
+            # Strategy: Semantic Split for General, Paragraphs for others?
+            # User requirement: "General Docs -> Semantic Splitter". Rules don't forbid semantic for others.
+            # But "Table" has specific rules. (Table logic is separate in upload.py for now).
+            # For Legislation, semantic might be overkill if paragraphs are clear, but helpful.
+            # Let's use Semantic for General/Diario and Paragraphs for Law (structure is strict).
             
-            # Generate Metadata for this batch
-            batch_metadatas = []
-            for k in range(i, end_idx):
-                meta = metadata.copy()
-                meta["chunk_index"] = k
-                meta["total_chunks"] = total_chunks
-                meta["original_doc_id"] = doc_id # Fix for deletion lookup later
-                batch_metadatas.append(meta)
+            micro_chunks = []
+            if doc_type == "general":
+                 micro_chunks = text_splitter.split_semantically(parent_text)
+            else:
+                 # Legislation/Diario usually structured by paragraphs
+                 micro_chunks = text_splitter.split_by_paragraphs(parent_text)
             
-            try:
-                collection.add(
-                    documents=batch_chunks,
-                    metadatas=batch_metadatas,
-                    ids=batch_ids
-                )
-                logger.info(f"📊 Progresso de indexação: Lote {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} ({end_idx}/{total_chunks}) salvo.")
-            except Exception as e:
-                logger.error(f"Indexing batch failed at index {i}: {e}")
+            if not micro_chunks:
+                continue
+
+            # C. Index Micros to Chroma
+            ids = []
+            docs = []
+            metas = []
+            
+            for m_idx, m_text in enumerate(micro_chunks):
+                chunk_id = f"{parent_id}_micro_{m_idx}"
                 
-        logger.info(f"Indexing complete for doc {doc_id}.")
+                # Metadata inheritance
+                meta = metadata.copy()
+                meta["chunk_index"] = m_idx # Relative to parent? Or Global?
+                # Global index is hard to track without counter. Let's strictly use Parent ref.
+                meta["parent_id"] = parent_id
+                meta["original_doc_id"] = doc_id
+                meta["parent_index"] = p_idx
+                meta["parent_type"] = parent_type
+                
+                ids.append(chunk_id)
+                docs.append(m_text)
+                metas.append(meta)
+            
+            if ids:
+                try:
+                    collection.add(ids=ids, documents=docs, metadatas=metas)
+                    total_micros_indexed += len(ids)
+                except Exception as e:
+                    logger.error(f"Failed to index micros for parent {parent_id}: {e}")
+
+        logger.info(f"Indexing complete for {doc_id}. Parents: {total_parents}, Micros: {total_micros_indexed}.")
 
     async def inspect_document(self, doc_id: str) -> Dict[str, Any]:
         """
@@ -429,16 +576,160 @@ class DatabaseManager:
             logger.error(f"Inspect document failed: {e}")
             return {"error": str(e)}
 
-    async def search_documents(self, query: str, limit: int = 5) -> list[dict]:
+    async def get_pending_documents(self) -> List[Dict[str, Any]]:
+        """
+        Returns all documents in 'pending' status for the Staging Area.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        query = "SELECT id, filename, source, doc_type, sphere, publication_date, created_at FROM documents WHERE status = 'pending' ORDER BY created_at DESC"
+        async with self._sqlite_connection.execute(query) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def update_document_metadata(self, doc_id: str, updates: Dict[str, Any]):
+        """
+        Updates document metadata (doc_type, sphere, publication_date) in SQLite.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        fields = []
+        params = []
+        for key, value in updates.items():
+            if key in ["doc_type", "sphere", "publication_date"]:
+                fields.append(f"{key} = ?")
+                params.append(value)
+        
+        if not fields:
+            return
+            
+        params.append(doc_id)
+        query = f"UPDATE documents SET {', '.join(fields)} WHERE id = ?"
+        
+        async with self._sqlite_connection.execute(query, params) as cursor:
+            pass
+        await self._sqlite_connection.commit()
+
+    async def activate_document(self, doc_id: str) -> bool:
+        """
+        Promotes a document from 'pending' to 'active' and indexes it in ChromaDB.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        start_time = time.perf_counter()
+        
+        # Build Query String
+        if isinstance(query, list):
+            # Clean and join with OR
+            clean_terms = [t.replace('"', '').replace("'", "") for t in query if t.strip()]
+            if not clean_terms:
+                return []
+            # FTS5 syntax: term1 OR term2
+            fts_query_str = " OR ".join([f'"{t}"' for t in clean_terms])
+        else:
+            # Legacy string fallback
+            fts_query_str = f'"{query}"'
+
+        # FTS5 Query
+        # We match against the virtual table but join with real table for metadata
+        
+        # 2. Index in ChromaDB
+        # We need final_meta_type logic usually, but here we use what's in the DB (already refined or corrected by user)
+        base_meta = {
+            "source": doc["source"], 
+            "filename": doc["filename"], 
+            "doc_type": doc["doc_type"],
+            "sphere": doc["sphere"],
+            "status": "active"
+        }
+        
+        # Simple indexing (as in upload.py)
+        await self.index_document_text(
+            doc_id=doc_id, 
+            text=doc["text_content"],
+            metadata=base_meta
+        )
+        
+        # 3. Update status to 'active'
+        async with self._sqlite_connection.execute("UPDATE documents SET status = 'active' WHERE id = ?", (doc_id,)) as cursor:
+            pass
+        await self._sqlite_connection.commit()
+        
+        logger.info(f"✅ Documento {doc_id} ATIVADO e indexado com sucesso.")
+        return True
+
+    async def get_context_window(self, doc_id: str, center_index: int, window_size: int = 1) -> str:
+        """
+        Retrieves a 'window' of chunks around a specific index.
+        Useful for expanding context without loading the full document.
+        """
+        try:
+            collection = self.chroma_client.get_collection("sentinela_documents")
+            
+            # Range query in Chroma is tricky with where filter only supporting direct comparisons usually
+            # But we can try multiple queries or a range filter if supported.
+            # Using $gte and $lte on chunk_index
+            
+            start_idx = max(0, center_index - window_size)
+            end_idx = center_index + window_size
+            
+            results = collection.get(
+                where={
+                    "$and": [
+                        {"original_doc_id": doc_id},
+                        {"chunk_index": {"$gte": start_idx}},
+                        {"chunk_index": {"$lte": end_idx}}
+                    ]
+                },
+                include=["documents", "metadatas"]
+            )
+            
+            if not results["documents"]:
+                return ""
+            
+            # Sort by index
+            combined = sorted(
+                zip(results["documents"], results["metadatas"]),
+                key=lambda x: x[1].get("chunk_index", 0)
+            )
+            
+            # Join texts
+            full_text = "\n\n".join([d for d, m in combined])
+            return full_text
+            
+        except Exception as e:
+            logger.error(f"Context window retrieval failed: {e}")
+            return ""
+
+    async def search_documents(self, query: str, limit: int = 5, where: dict = None, sphere: str = None) -> list[dict]:
         """
         Semantic search for RAG context.
         """
-        collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+        kwargs = {
+            "query_texts": [query],
+            "n_results": limit
+        }
         
-        results = collection.query(
-            query_texts=[query],
-            n_results=limit
-        )
+        # Default filter: Active only
+        status_filter = {"status": "active"}
+        
+        if not where and not sphere:
+            kwargs["where"] = status_filter
+        else:
+            # Combine filters using $and
+            conditions = [status_filter]
+            if where:
+                conditions.append(where)
+            if sphere:
+                conditions.append({"sphere": sphere})
+            
+            kwargs["where"] = {"$and": conditions}
+        
+        collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+        results = collection.query(**kwargs)
         
         # Format results
         # Chroma returns lists of lists (one per query)
@@ -470,76 +761,143 @@ class DatabaseManager:
         async with self._sqlite_connection.execute(query, (limit, offset)) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
-            
-    async def delete_document(self, doc_id: str) -> bool:
+
+    async def get_document_by_id(self, doc_id: str) -> Dict[str, Any]:
         """
-        Deletes document from SQLite and VectorDB.
+        Fetches full document details by ID from SQLite.
         """
         if not self._sqlite_connection:
             await self.get_sqlite()
             
-        # 1. Delete from SQLite
-        async with self._sqlite_connection.execute("DELETE FROM documents WHERE id = ?", (doc_id,)) as cursor:
-            if cursor.rowcount == 0:
-                logger.warning(f"Document {doc_id} not found in SQLite.")
-                # We typically rely on SQLite ID, but let's check Chroma too just in case?
-                # Actually, if it's not in SQLite, it might not exist or ID is wrong.
-                
-        # 2. Delete from ChromaDB
-        # We need to find all chunks with this doc_id.
-        # Our Indexing strategy uses IDs: f"{doc_id}_{i}"
-        # But Chroma 'where' filter is better. 
-        # Wait, we didn't store 'doc_id' in metadata explicitly in index_document_text?
-        # Let's check `index_document_text`.
-        # Metadatas are copies of `metadata` arg.
-        # We should ensure `doc_id` is in metadata for easy deletion!
-        # CURRENTLY: It is NOT guaranteed.
-        # FIX: We will delete by ID prefix matching usually, BUT Chroma delete supports `where` metadata filter.
-        # Since we might have missed adding doc_id to metadata in previous code, 
-        # we will rely on ID matching logic or we must update index_document_text.
-        # For now, let's try to delete by ID prefix if possible? 
-        # Chroma `delete` accepts `ids` list. We don't know the list.
-        # It accepts `where` filter.
-        # If we didn't save doc_id in metadata, we have a problem.
-        # Workaround: We know the ids are constructed as f"{doc_id}_{i}".
-        # But we don't know how many chunks (i).
-        # We can 'get' first to find them? Or just try deleting by filter if we had it.
-        # Lesson: Always put doc_id in metadata.
-        # Let's assume we implement metadata repair or just Try to use `where={"filename": ...}`? Unreliable.
-        # Let's clean up best effort by assuming 0..1000 chunks? Hacky.
-        # PROPER FIX: Chroma `delete` with `where_document` content? No.
-        # `delete` allows `ids`.
-        # Let's update `index_document_text` in general for future. 
-        # But for `delete_document` right now:
-        # We will attempt to delete chunks by guessing `doc_id` in metadata isn't there.
-        # Actually, in `index_document_text` we wrote: `ids = [f"{doc_id}_{i}" ...]`.
-        # We can query generic metadata to find them?
-        # For this iteration, let's assume we can't easily delete from Chroma without ID in metadata OR knowing all IDs.
-        # I'll implement a 'get' loop to find IDs starting with.
-        
-        collection = self.chroma_client.get_or_create_collection("sentinela_documents")
-        
-        # Deleta usando o filtro de metadados original_doc_id (mais robusto)
+        query = "SELECT * FROM documents WHERE id = ?"
+        async with self._sqlite_connection.execute(query, (doc_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+            
+    async def clear_vector_store(self) -> bool:
+        """
+        DANGER: Clears ALL vectors from ChromaDB.
+        """
         try:
-            collection.delete(where={"original_doc_id": doc_id})
-            logger.info(f"Todos os vetores do documento {doc_id} foram removidos do ChromaDB.")
+            # PersistentClient doesn't have a simple 'reset' method exposed easily on client?
+            # client.reset() is only for in-memory or if ALLOW_RESET is set.
+            # Safer to delete the collection and recreate.
+            self.chroma_client.delete_collection("sentinela_documents")
+            # Recreate empty
+            self.chroma_client.get_or_create_collection("sentinela_documents")
+            logger.warning("⚠️ Vector Store fully reset by admin request.")
+            return True
         except Exception as e:
-            logger.error(f"Erro ao deletar vetores do ChromaDB: {e}")
-            # Tentativa de fallback por prefixo de ID (caso o metadado tenha falhado no passado)
-            # Como não sabemos o total, tentamos um range maior, mas o 'where' é o oficial agora.
-            potential_ids = [f"{doc_id}_{i}" for i in range(2000)]
-            collection.delete(ids=potential_ids)
-            potential_ids_chunk = [f"{doc_id}_chunk_{i}" for i in range(2000)]
-            collection.delete(ids=potential_ids_chunk)
-        
-        return True
+            logger.error(f"Failed to clear vector store: {e}")
+            return False
 
-    async def close(self):
+    async def delete_document(self, doc_id: str) -> bool:
         """
-        Closes connections.
+        Deletes document from SQLite and VectorDB atomically.
         """
-        if self._sqlite_connection:
-            await self._sqlite_connection.close()
-            self._sqlite_connection = None
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        try:
+            # 1. Delete from SQLite (Transactions)
+            # 'doc_parents' has ON DELETE CASCADE in definition, so it should auto-delete.
+            # 'documents_fts' needs manual deletion because it's a virtual table without FK constraints usually.
+            
+            async with self._sqlite_connection.cursor() as cursor:
+                # Delete from FTS first (using internal ID mapping if possible, or matches)
+                # FTS delete is usually done by DELETE FROM table WHERE rowid = ... or matching cols.
+                # Since our FTS id is UNINDEXED, simple delete by ID might be slow or unsupported if not rowid.
+                # But we inserted 'id' as a column.
+                await cursor.execute("DELETE FROM documents_fts WHERE id = ?", (doc_id,))
+                
+                # Delete from main table (Triggers Cascade for doc_parents)
+                await cursor.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+                
+                deleted_count = cursor.rowcount
+            
+            await self._sqlite_connection.commit()
+            
+            if deleted_count == 0:
+                logger.warning(f"Document {doc_id} not found in SQLite to delete.")
+                # We still try to clean Chroma just in case phantom data exists
+                
+            # 2. Delete from ChromaDB
+            # We now reliably save 'original_doc_id' in metadata.
+            collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+            
+            try:
+                # Try delete by metadata (Best Modern Method)
+                collection.delete(where={"original_doc_id": doc_id})
+                logger.info(f"Vectors for {doc_id} deleted from ChromaDB.")
+            except Exception as e:
+                logger.error(f"Chroma metadata delete failed: {e}. Trying fallback.")
+                # Fallback: Delete potential IDs if metadata failed
+                potential_ids = [f"{doc_id}_micro_{i}" for i in range(5000)] # Adjusted naming convention
+                collection.delete(ids=potential_ids)
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Atomic Delete failed for {doc_id}: {e}")
+            return False
+
+    async def save_parent_chunk(self, doc_id: str, parent_index: int, text: str, parent_type: str) -> str:
+        """
+        Saves a Macro Chunk (Parent) to SQLite.
+        Returns the parent_id (doc_id + _parent_ + index).
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        parent_id = f"{doc_id}_parent_{parent_index}"
+        
+        # Insert or Replace to allow re-ingestion
+        query = """
+        INSERT OR REPLACE INTO doc_parents (id, doc_id, text_content, parent_type, parent_index)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        
+        async with self._sqlite_connection.execute(query, (parent_id, doc_id, text, parent_type, parent_index)) as cursor:
+            pass
+            
+        await self._sqlite_connection.commit()
+        return parent_id
+
+    async def get_parent_content(self, parent_id: str) -> Optional[str]:
+        """
+        Retrieves the full content of a Parent Chunk from SQLite.
+        If type is 'page', peeks at the next page to fix cut sentences.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+            
+        query = "SELECT id, doc_id, text_content, parent_type, parent_index FROM doc_parents WHERE id = ?"
+        async with self._sqlite_connection.execute(query, (parent_id,)) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+                
+            content = row["text_content"]
+            parent_type = row["parent_type"]
+            
+            # PAGE PEEKING LOGIC
+            # Only for PDFs/General pages where sentences might span boundaries
+            if parent_type == "page":
+                doc_id = row["doc_id"]
+                current_index = row["parent_index"]
+                next_index = current_index + 1
+                
+                # Fetch next page for peeking
+                peek_query = "SELECT text_content FROM doc_parents WHERE doc_id = ? AND parent_index = ?"
+                async with self._sqlite_connection.execute(peek_query, (doc_id, next_index)) as peek_cursor:
+                    next_page = await peek_cursor.fetchone()
+                    if next_page:
+                        # Append first 200 chars (approx 2 sentences)
+                        peek_text = next_page["text_content"][:250].replace("\n", " ") # Flatten slightly
+                        content += f"\n\n[...Continua na Próxima Página]: {peek_text}..."
+            
+            return content
 
 db_manager = DatabaseManager()
