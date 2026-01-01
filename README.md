@@ -4,22 +4,23 @@
 
 ## 🚀 Key Features
 
-*   **Generative Chat**: Real-time Q&A with "Sentinela IA" using context from ingested documents.
+*   **Generative Chat**: Real-time Q&A with "Sentinela IA" (powered by **Gemma 3 27B** 🧠) using context from ingested documents.
 *   **Audit Trail**: Full logging of interactions, sources used, and reasoning chains (CoT).
-*   **Document Management**:
-    *   **Dashboard**: Overview of indexed documents.
-    *   **Upload**: Drag & drop support for PDF, TXT, HTML.
-    *   **Local Scan**: Ingest massive datasets from the `data/ingest` folder.
-*   **Staging Area (Quarentena)**: Human-in-the-loop validation for OCR text and metadata before indexing.
+*   **Advanced Ingestion (Docling)**:
+    *   **PDF Intelligence**: Uses **Docling** (IBM) to extract layout-aware text, tables, and headers from complex PDFs.
+    *   **Local Scan**: Ingest massive datasets recursively from the `data/ingest` folder.
+    *   **Staging Area (Quarentena)**: Human-in-the-loop validation for OCR text and metadata before indexing.
 *   **Data Inspector**: Low-level visualization of vector chunks in ChromaDB.
 *   **Cognitive Layout (Cérebro)**: Fine-tune LLM temperature, system prompts, and RAG retrieval parameters.
 
 ## 🏗 Architecture
 
-*   **Backend**: Python, FastAPI, Uvicorn.
-*   **Database**: SQLite (Metadata), ChromaDB (Vector Store).
-*   **Frontend**: React 18, Vite, Tailwind CSS, React Router.
-*   **AI Engine**: Ollama (LLM) + SentenceTransformers (Embeddings).
+*   **Backend**: Python, FastAPI, Uvicorn (Async/Await).
+*   **Ingestion Engine**: **Docling** (OCR/Layout Analysis) + SentenceTransformers (Embeddings).
+*   **Database**: SQLite (Metadata, Audit Logs), ChromaDB (Vector Store).
+*   **Frontend**: **React 18 + Vite**, Tailwind CSS (Single Page Application).
+*   **AI Engine**: Ollama (LLM Server) running **Gemma 3:27b** (Default).
+*   **Optimization**: Lazy Loading of embedding models & Explicit Garbage Collection for efficiency on Apple Silicon.
 
 ## 🛠️ Developer Guide
 
