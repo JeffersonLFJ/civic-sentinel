@@ -11,9 +11,11 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger("src.interfaces.api.routes.upload")
 router = APIRouter()
 
-async def process_document_task(file_location: str, filename: str, source: str, doc_type: str, sphere: str = Sphere.MUNICIPAL.value):
+from src.ingestors.router import ingestion_router, IngestionType
+
+async def process_document_task(file_location: str, filename: str, source: str, doc_type: str = "documento", sphere: str = "unknown", tags: str = ""):
     """
-    Função core de processamento compartilhada entre Upload manual e Scan Local.
+    Função core de processamento usando o novo IngestionRouter.
     """
     processed_dir = settings.DATA_DIR / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
@@ -21,150 +23,47 @@ async def process_document_task(file_location: str, filename: str, source: str, 
     file_path = Path(file_location)
     
     try:
-        # Decision Logic based on DocType
-        ocr_result = {"extracted_text": "", "ocr_method": "unknown"}
-        structured_chunks = None # Specific for Laws
+        logger.info(f"🔄 Inicia ingestão via Router: {filename} [{doc_type}]")
         
-        # --- 1. Auto-Dispatch & Extraction Logic ---
+        # Dispatch to Router
+        # doc_type string to IngestionType literal
+        valid_types = ["documento", "legislacao", "tabela", "diario"]
+        safe_type = doc_type if doc_type in valid_types else "documento"
         
-        # Determine Dispatcher and Archetype
-        # We preserve the user's manual category for the SQL database to avoid breaking UI/Filters.
-        # But we refine the 'doc_type' metadata for the LLM ONLY if the choice was 'lei'.
+        ingestion_result = await ingestion_router.route(str(file_path), safe_type)
         
-        final_meta_type = doc_type
-        
-        # A) LEGISLATION DISPATCH
-        if doc_type in ["lei", "legislation"]:
-            # Specific Kelsen sub-classification ONLY for 'lei' selection
-            final_meta_type = DocType.LEI_ORDINARIA.value
-            fname_lower = filename.lower()
-            if "constituicao" in fname_lower:
-                final_meta_type = DocType.CONSTITUICAO.value
-            elif "complementar" in fname_lower:
-                final_meta_type = DocType.LEI_COMPLEMENTAR.value
-            elif "decreto" in fname_lower:
-                final_meta_type = DocType.DECRETO.value
-            elif "portaria" in fname_lower:
-                final_meta_type = DocType.PORTARIA.value
-            elif "resolucao" in fname_lower:
-                final_meta_type = DocType.RESOLUCAO.value
-            
-            if fname_lower.endswith((".html", ".htm")):
-                from src.ingestors.html_law import html_law_ingestor
-                logger.info(f"⚖️ Ingestão (Lei HTML - {final_meta_type}): {filename}")
-                result = await html_law_ingestor.process_file(str(file_path), filename)
-                if result["status"] == "success":
-                    ocr_result["extracted_text"] = result["full_text"]
-                    ocr_result["ocr_method"] = "html_law_parser"
-                    structured_chunks = result["chunks"]
-                else:
-                    ocr_result["extracted_text"] = file_path.read_text(errors="ignore")
-            else:
-                logger.info(f"⚖️ Ingestão (Lei PDF/OCR - {final_meta_type}): {filename}")
-                ocr_result = await ocr_engine.process_document(str(file_path))
-
-        # B) TABLE DISPATCH
-        elif doc_type == "tabela":
-            logger.info(f"📊 Ingestão (Tabela): {filename}")
-            from src.utils.text_processing import text_splitter
-            import csv
-            rows = []
-            if filename.lower().endswith(".csv"):
-                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    reader = csv.reader(f)
-                    rows = list(reader)
-            elif filename.lower().endswith((".xlsx", ".xls")):
-                 try:
-                    import pandas as pd
-                    df = pd.read_excel(file_path)
-                    rows = [df.columns.tolist()] + df.values.tolist()
-                 except Exception as e:
-                    ocr_result["extracted_text"] = f"Erro Excel: {e}"
-            
-            if rows:
-                table_chunks = text_splitter.split_table(rows, chunk_size=50)
-                structured_chunks = []
-                full_text_buffer = []
-                for idx, chunk_text in enumerate(table_chunks):
-                    structured_chunks.append({
-                        "text": chunk_text,
-                        "metadata": {
-                            "chunk_type": "table_fragment",
-                            "page_number": idx + 1,
-                            "doc_type": doc_type # Keeps 'tabela'
-                        }
-                    })
-                    full_text_buffer.append(chunk_text)
-                ocr_result["extracted_text"] = "\n\n".join(full_text_buffer)
-                ocr_result["ocr_method"] = "table_splitter_v1"
-            else:
-                ocr_result["extracted_text"] = "Tabela vazia ou erro de leitura."
-
-        # C) DIARIO DISPATCH
-        elif doc_type in ["diario", "diario_oficial"]:
-            logger.info(f"🏛️ Ingestão (Diário Oficial): {filename}")
-            ocr_result = await ocr_engine.process_document(str(file_path))
-
-        # D) DENUNCIA DISPATCH
-        elif doc_type == "denuncia":
-            logger.info(f"📄 Ingestão (Denúncia): {filename}")
-            ocr_result = await ocr_engine.process_document(str(file_path))
-
-        # E) GENERAL DISPATCH (Default)
-        else:
-            logger.info(f"🔍 Ingestão (Geral): {filename}")
-            ocr_result = await ocr_engine.process_document(str(file_path))
-            
-            # Healing Heuristic for PDFs
-            text = ocr_result.get("extracted_text", "")
-            if text:
-                import re
-                text = re.sub(r'(?<=[a-zA-Z0-9,])\n(?=[a-zà-ù])', ' ', text)
-                ocr_result["extracted_text"] = text 
-        
-        # --- 2. Sphere Heuristics ---
-        # Se a esfera for desconhecida, tentamos inferir pelo nome ou conteúdo.
-        final_sphere = sphere
-        content_sample = ocr_result["extracted_text"][:2000].lower()
-        fname_lower = filename.lower()
-        
-        if final_sphere == Sphere.DESCONHECIDA.value:
-            if any(k in fname_lower or k in content_sample for k in ["união", "brasil", "nacional", "federal", "ministério"]):
-                final_sphere = Sphere.FEDERAL.value
-            elif any(k in fname_lower or k in content_sample for k in ["estadual", "estado de", "rj", "governadoria"]):
-                final_sphere = Sphere.ESTADUAL.value
-            elif any(k in fname_lower or k in content_sample for k in ["prefeitura", "municipal", "município", "nova iguaçu", "semus"]):
-                final_sphere = Sphere.MUNICIPAL.value
-
         # Persistence Logic
         storage_path = None
-        if source in ["admin", "local_ingest"]:
-            # Move ou copia para processed
+        if source in ["admin", "local_ingest", "user_upload"]:
             final_path = processed_dir / filename
             if str(file_path) != str(final_path):
                 shutil.copy2(str(file_path), str(final_path))
             storage_path = str(final_path)
         
-        # Save DB - WE KEEP THE ORIGINAL doc_type HERE
+        # Save DB
         from src.core.database import db_manager
+        
+        # Determine status: "pending" (Quarantine)
+        # We classify as 'doc_type' but status is pending review.
+        # Ideally, if user explicitly says "Legislation", maybe we can auto-approve?
+        # Requirement: "Quarantine first". So status is pending.
+        
         doc_data = {
             "filename": filename,
             "source": source,
             "storage_path": storage_path,
-            "text_content": ocr_result["extracted_text"],
-            "ocr_method": ocr_result["ocr_method"],
-            "doc_type": doc_type, # PERSIST THE USER CHOICE
-            "sphere": final_sphere,
-            "status": "pending" # ALL uploads go to Quarentena
+            "text_content": ingestion_result.get("extracted_text", ""),
+            "ocr_method": ingestion_result.get("ocr_method", "router_default"),
+            "doc_type": safe_type, # We trust the user's initial classification or Router's output
+            "sphere": sphere,
+            "status": "pending",
+            "custom_tags": tags,
+            "initial_chunks": ingestion_result.get("chunks", None) # Save initial chunks if available
         }
         
         doc_id = await db_manager.save_document_record(doc_data)
         
-        # --- 3. STAGING AREA BYPASS ---
-        # We DO NOT index in ChromaDB yet. 
-        # Vectorization only happens after Human Approval in Admin.
-        
-        logger.info(f"⏳ Documento {filename} enviado para QUARENTENA. ID: {doc_id}")
+        logger.info(f"✅ Ingestão completa via Router. ID: {doc_id}")
         return doc_id
         
     except Exception as e:
@@ -175,21 +74,30 @@ async def process_document_task(file_location: str, filename: str, source: str, 
 async def upload_document(
     file: UploadFile = File(...),
     source: str = Form("user"),
-    doc_type: str = Form("generico"),
-    sphere: str = Form(Sphere.MUNICIPAL.value)
+    tags: str = Form(""),
+    doc_type: str = Form("documento"), # New field
+    custom_filename: Optional[str] = Form(None)
 ):
     temp_dir = settings.DATA_DIR / "uploads_temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
     file_location = temp_dir / file.filename
     
     try:
-        logger.info(f"💾 Recebendo upload: {file.filename}")
+        logger.info(f"💾 Upload recebido: {file.filename} ({doc_type})")
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        doc_id = await process_document_task(str(file_location), file.filename, source, doc_type, sphere)
+        final_name = custom_filename if custom_filename and custom_filename.strip() else file.filename
         
-        # Cleanup temp
+        doc_id = await process_document_task(
+            str(file_location), 
+            final_name, 
+            source, 
+            doc_type=doc_type, 
+            sphere="unknown",
+            tags=tags
+        )
+        
         if file_location.exists():
             os.remove(file_location)
 

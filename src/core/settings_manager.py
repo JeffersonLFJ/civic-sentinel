@@ -10,6 +10,8 @@ SETTINGS_FILE = settings.DATA_DIR / "runtime_settings.json"
 
 DEFAULT_SETTINGS = {
     # Modelo / Cognição
+    "llm_model": "gemma3:27b",
+    "vision_model": "llava",
     "llm_temperature": 0.1,
     "llm_top_k": 40, # Generation sampling
     "llm_num_ctx": 8192, # Context Window (Tokens)
@@ -20,8 +22,10 @@ DEFAULT_SETTINGS = {
     "min_relevance_score": 0.4, # Minimum partial score to context inclusion
     "rag_top_k": 50, # Number of documents to retrieve
     
-    # OCR
+    # OCR & Ingestion (Requires Re-indexing)
     "ocr_validation_threshold": 80.0, # Tesseract confidence to trigger Vision fallback
+    "chunk_size": 3000,
+    "chunk_overlap": 500,
     
     # Sistema
     "context_window_size": 20, # Message History (Legacy/User View)
@@ -137,5 +141,20 @@ class SettingsManager:
     def intent_prompt(self) -> str:
         return self._settings.get("intent_prompt", "")
 
+    @property
+    def llm_model(self) -> str:
+        return self._settings.get("llm_model", "gemma2:2b")
+
+    @property
+    def vision_model(self) -> str:
+        return self._settings.get("vision_model", "llava")
+
+    @property
+    def chunk_size(self) -> int:
+        return int(self._settings.get("chunk_size", 3000))
+
+    @property
+    def chunk_overlap(self) -> int:
+        return int(self._settings.get("chunk_overlap", 500))
 
 settings_manager = SettingsManager()

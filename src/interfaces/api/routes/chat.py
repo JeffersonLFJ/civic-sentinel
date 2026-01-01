@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
@@ -6,6 +7,7 @@ from src.utils.security import anonymize_user
 from src.utils.privacy import pii_scrubber
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class Message(BaseModel):
     role: str # 'user' or 'assistant'
@@ -92,10 +94,27 @@ async def chat_endpoint(request: ChatRequest):
         listening_threshold = settings_manager.active_listening_threshold
         if ambiguity_score > listening_threshold and not is_confirmation:
              # Stop and Ask (Escuta Ativa)
+             
+             ambiguity_response_text = f"Desculpe, sua pergunta parece ter múltiplos sentidos. Você se refere a {intent_data.get('understood_intent', 'algo específico')} ou outro tópico? (Score de Ambiguidade: {ambiguity_score})"
+             
+             # Log Audit for Ambiguity Check
+             await db_manager.log_audit(
+                action="active_listening_check",
+                user_hash=user_hash,
+                query_text=request.message,
+                response_text=ambiguity_response_text,
+                sources_json="[]",
+                confidence_score=ambiguity_score,
+                details=json.dumps({
+                    "intent": intent_data,
+                    "trigger": "ambiguity_threshold_exceeded"
+                })
+             )
+
              # Return a structured JSON response immediately (no stream for this interruption)
              return {
                  "status": "ambiguity_detected",
-                 "response": f"Desculpe, sua pergunta parece ter múltiplos sentidos. Você se refere a {intent_data.get('understood_intent', 'algo específico')} ou outro tópico? (Score de Ambiguidade: {ambiguity_score})",
+                 "response": ambiguity_response_text,
                  "metadata": {
                      "ambiguity_score": ambiguity_score,
                      "intent_data": intent_data
@@ -142,8 +161,12 @@ async def chat_endpoint(request: ChatRequest):
                 where=where_filter
             )
             # B. Keyword Search
+            # B. Keyword Search
+            # Ensure keywords is a string for FTS
+            keyword_query_str = " ".join(search_keywords) if isinstance(search_keywords, list) else str(search_keywords)
+            
             keyword_task = db_manager.search_documents_keyword(
-                search_keywords, 
+                keyword_query_str, 
                 limit=settings_manager.rag_top_k,
                 sphere=intent_sphere if intent_sphere != "unknown" else None
             )
@@ -346,6 +369,7 @@ async def chat_endpoint(request: ChatRequest):
             sources_json_str = json.dumps(citation_metadata)
             clean_response_log = pii_scrubber.scrub(response["content"])
             
+            logger.info("💾 Logging audit for standard chat...")
             await db_manager.log_audit(
                 action="chat_rag_standard",
                 user_hash=user_hash,
@@ -358,8 +382,9 @@ async def chat_endpoint(request: ChatRequest):
                     "prompt_version": prompt_version,
                     "model": response["model"],
                     "rag_count": len(citation_metadata)
-                })
+                }, default=str)
             )
+            logger.info("✅ Audit logged successfully.")
             
             return {
                 "response": response["content"], 
@@ -371,4 +396,6 @@ async def chat_endpoint(request: ChatRequest):
             }
 
     except Exception as e:
+        import traceback
+        logger.error(f"Chat Endpoint Error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

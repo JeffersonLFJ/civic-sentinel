@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela - Inspetor de Dados</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .inspector-container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 100px);
+        }
+
+        .doc-list {
+            width: 300px;
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .chunk-viewer {
+            flex: 1;
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .doc-item {
+            padding: 10px;
+            border-bottom: 1px solid #334155;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .doc-item:hover {
+            background: #334155;
+        }
+
+        .doc-item.active {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .chunk-card {
+            background: #1e293b;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #6366f1;
+        }
+
+        .chunk-meta {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .chunk-text {
+            font-family: monospace;
+            white-space: pre-wrap;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Painel de Controle</span>
+            </div>
+            <nav>
+                <a href="index.html">📄 Documentos</a>
+                <a href="#" onclick="openAuditoriaModal()">📊 Auditoria & Citações</a>
+                <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
+                <a href="inspector.html" class="active">🔍 Inspetor de Dados</a>
+                <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h1>Inspetor de Indexação (ChromaDB)</h1>
+                <p style="color: #94a3b8;">Visualize exatamente como o texto foi extraído e armazenado.</p>
+            </header>
+
+            <div class="inspector-container">
+                <div class="doc-list" id="docList">
+                    <p>Carregando documentos...</p>
+                </div>
+                <div class="chunk-viewer" id="chunkViewer">
+                    <div style="text-align: center; color: #94a3b8; margin-top: 50px;">
+                        Selecione um documento à esquerda para ver seus "Chunks" (pedaços de texto).
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="auditoriaModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>Auditoria de Citações e Inteligência</h3>
+                <button class="btn secondary" onclick="closeAuditoria()">Fechar</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                            <th style="padding: 12px;">Data/Hora</th>
+                            <th style="padding: 12px;">Ação</th>
+                            <th style="padding: 12px;">Citações / Detalhes</th>
+                            <th style="padding: 12px;">Confiança</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div id="logsModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📜 Logs do Sistema</h3>
+                <button class="btn secondary" onclick="closeLogs()">Fechar</button>
+            </div>
+            <div id="logsContainer"
+                style="flex: 1; background: #0f172a; padding: 1rem; overflow-y: auto; font-family: monospace; color: #a5b4fc; font-size: 0.85rem; border-radius: 6px; border: 1px solid #334155;">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=4"></script>
+    <script>
+        // Shared UI Logic for Inspector Page is now handled by app.js
+        // We only keep fetchAuditoria if it's not in app.js or slightly different.
+        // Actually app.js already has fetchAuditoria, so we can likely remove this duplication.
+
+        // Inspector Specific Logic
+        const docList = document.getElementById('docList');
+        const chunkViewer = document.getElementById('chunkViewer');
+
+        async function initInspector() {
+            try {
+                console.log("Iniciando Inspetor...");
+                const res = await fetch('/api/documents/?limit=100');
+                const responseData = await res.json();
+
+                // Handle both array directly or {data: []}
+                const docs = Array.isArray(responseData) ? responseData : (responseData.data || []);
+
+                if (docs.length === 0) {
+                    docList.innerHTML = '<p style="color:#64748b; padding: 10px;">Nenhum documento encontrado.</p>';
+                    return;
+                }
+
+                docList.innerHTML = docs.map(doc => `
+                    <div class="doc-item" onclick="inspectDoc('${doc.id}', this)">
+                        <div style="font-weight:600; color:#e2e8f0;">${doc.filename}</div>
+                        <div style="font-size:0.8rem; color:#94a3b8;">${doc.source} • ${doc.ocr_method || 'N/A'}</div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                docList.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
+            }
+        }
+
+        async function inspectDoc(id, el) {
+            // Highlight active
+            document.querySelectorAll('.doc-item').forEach(e => e.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            chunkViewer.innerHTML = '<div style="text-align:center; color:#94a3b8; margin-top:20px;">Carregando chunks do ChromaDB...</div>';
+
+            try {
+                const res = await fetch(`/api/admin/inspect/${id}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    chunkViewer.innerHTML = `<div style="color:red; padding:20px;">Erro: ${data.error}</div>`;
+                    return;
+                }
+
+                if (!data.chunks || data.chunks.length === 0) {
+                    chunkViewer.innerHTML = `<div style="padding:20px;">Nenhum chunk encontrado para este documento. (Pode estar processando ou falhou na indexação)</div>`;
+                    return;
+                }
+
+                chunkViewer.innerHTML = `
+                    <div style="margin-bottom:15px; border-bottom:1px solid #334155; padding-bottom:10px;">
+                        <h3 style="color:#818cf8;">${data.doc_id}</h3>
+                        <span style="font-size:0.9rem; color:#94a3b8;">Total Chunks: ${data.total_chunks}</span>
+                    </div>
+                    ` + data.chunks.map(chunk => `
+                    <div class="chunk-card">
+                        <div class="chunk-meta">
+                            <span>Index: ${chunk.chunk_index}</span>
+                            <span>Size: ${chunk.full_length} chars</span>
+                        </div>
+                        <div class="chunk-text">${escapeHtml(chunk.content)}</div>
+                        <div style="margin-top:10px; font-size:0.75rem; color:#64748b; border-top:1px dashed #334155; padding-top:5px;">
+                            Metadata: ${JSON.stringify(chunk.metadata)}
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                chunkViewer.innerHTML = `<div style="color:red; padding:20px;">Erro de conexão: ${e.message}</div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Init
+        initInspector();
+
+    </script>
+</body>
+
+</html>

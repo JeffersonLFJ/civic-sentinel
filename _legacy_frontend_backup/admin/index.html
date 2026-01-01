@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinela Cívico - Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🦅 Sentinela</h2>
+                <span>Painel de Controle</span>
+            </div>
+            <nav>
+                <a href="#" id="docsNav" class="active" onclick="showSection('docs')">📄 Documentos</a>
+                <a href="#" id="stagingNav" onclick="showSection('staging')">🛡️ Quarentena</a>
+                <a href="#" id="auditNav" onclick="showSection('audit')">📊 Auditoria & Raio-X</a>
+                <a href="settings.html">⚙️ Configurações</a>
+                <a href="#" onclick="openLogs()">📜 Logs do Sistema</a>
+                <a href="inspector.html">🔍 Inspetor de Dados</a>
+                <a href="chat.html" target="_blank">💬 Chat de Teste ↗</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Prompt Editor Modal -->
+            <div id="promptModal" class="modal hidden">
+                <div class="modal-content"
+                    style="width: 80%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+                    <h3>⚙️ Editor de Prompt do Sistema</h3>
+                    <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">
+                        Defina as instruções de comportamento, bioética e formatação da IA do Sentinela.
+                    </p>
+                    <textarea id="systemPromptInput"
+                        style="flex:1; background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:15px; border-radius:6px; font-family:monospace; line-height:1.5; resize:none;"></textarea>
+
+                    <div class="modal-actions" style="margin-top:1rem;">
+                        <button onclick="closePromptModal()" class="btn secondary">Cancelar</button>
+                        <button onclick="saveSystemPrompt()" class="btn primary">Salvar Alterações</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO: DOCUMENTOS -->
+            <section id="docsSection">
+                <header>
+                    <h1>Gestão de Documentos</h1>
+                    <div class="actions">
+                        <button id="promptBtn" class="btn secondary"
+                            style="background: #0f172a; color: #a5b4fc; border: 1px solid #334155;"
+                            aria-label="Editar Prompt do Sistema">⚙️ Prompt</button>
+                        <button id="refreshBtn" class="btn secondary" aria-label="Atualizar lista de documentos">🔄
+                            Atualizar</button>
+                        <button id="scanLocalBtn" class="btn secondary"
+                            style="background: #0f172a; color: #fff; border: 1px solid #334155;"
+                            aria-label="Escanear pasta local de ingestão">📁 Scan Pasta
+                            Local</button>
+                        <button id="uploadBtn" class="btn primary" aria-label="Fazer upload de documento">+ Upload
+                            Manual</button>
+                    </div>
+                </header>
+
+                <div class="stats-cards">
+                    <div class="card">
+                        <h3>Total Indexado</h3>
+                        <p id="totalDocs">...</p>
+                    </div>
+                    <div class="card">
+                        <h3>Última Ingestão</h3>
+                        <p>Hoje</p>
+                    </div>
+                    <div class="card warning">
+                        <h3>Alertas de Risco</h3>
+                        <p>0 (Demo)</p>
+                    </div>
+                </div>
+
+                <div class="documents-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Arquivo</th>
+                                <th>Fonte</th>
+                                <th>Tipo</th>
+                                <th>Esfera</th>
+                                <th>Data</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="docsTableBody">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SEÇÃO: QUARENTENA -->
+            <section id="stagingSection" class="hidden">
+                <header>
+                    <h1>Quarentena de Validação 🛡️</h1>
+                    <div class="actions">
+                        <button onclick="approveAllStaging()" class="btn secondary">✅ Aprovar Tudo</button>
+                        <button onclick="fetchStaging()" class="btn primary">🔄 Atualizar</button>
+                    </div>
+                </header>
+                <div class="card warning" style="margin-bottom: 20px;">
+                    <p>⚠️ <strong>Atenção:</strong> Documentos nesta lista ainda não estão no RAG. Valide os metadados e
+                        clique em "Aprovar" para vetorizá-los.</p>
+                </div>
+                <div class="documents-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Arquivo (Clique para Ver)</th>
+                                <th>Tipo Sugerido</th>
+                                <th>Esfera</th>
+                                <th>Data Publicação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stagingTableBody">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SEÇÃO: AUDITORIA (PÁGINA INTEIRA) -->
+            <section id="auditSection" class="hidden">
+                <header>
+                    <h1>Auditoria & Raio-X</h1>
+                    <div class="actions">
+                        <button onclick="clearAuditLogs()" class="btn danger-sm">🗑️ Limpar Auditoria</button>
+                        <button onclick="fetchAuditoria()" class="btn secondary">🔄 Atualizar</button>
+                    </div>
+                </header>
+
+                <div class="audit-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: calc(100vh - 150px);">
+                    <!-- Coluna Esq: Lista de Interações -->
+                    <div class="card" style="display: flex; flex-direction: column; overflow: hidden;">
+                        <h4 style="margin-bottom: 15px; color: #94a3b8;">Histórico de Interações</h4>
+                        <div style="flex: 1; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                                        <th style="padding: 10px;">Data/Hora</th>
+                                        <th style="padding: 10px;">Pergunta</th>
+                                        <th style="padding: 10px;">Confiança</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditTableBody">
+                                    <!-- Filled by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Dir: O Inspetor (Raio-X) -->
+                    <div id="inspectorPanel" class="card"
+                        style="display: flex; flex-direction: column; overflow: hidden; border-color: #3b82f6;">
+                        <h4 style="margin-bottom: 15px; color: #3b82f6;">🔍 Inspetor Raio-X</h4>
+                        <div id="inspectorContent" style="flex: 1; overflow-y: auto;">
+                            <div style="text-align: center; color: #94a3b8; padding: 40px;">
+                                <p>Selecione uma interação à esquerda para ver o Raio-X técnico.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Upload Modal -->
+        <div id="uploadModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Upload de Documento</h3>
+
+                <label class="block text-sm font-medium mb-1 text-gray-300"
+                    style="text-align: left; display: block; margin-bottom: 5px;">Tipo de Documento</label>
+                <select id="docType"
+                    style="width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 15px; outline: none;">
+                    <option value="lei_ordinaria">📜 Lei Ordinária</option>
+                    <option value="lei_complementar">📜 Lei Complementar</option>
+                    <option value="constituicao">⚖️ Constituição</option>
+                    <option value="decreto">📄 Decreto</option>
+                    <option value="portaria">📄 Portaria</option>
+                    <option value="diario_oficial">📰 Diário Oficial</option>
+                    <option value="tabela">📊 Planilha / Tabela</option>
+                </select>
+
+                <div class="file-drop-area">
+                    <span class="file-msg">Arraste ou clique aqui</span>
+                    <input class="file-input" type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.txt,.html"
+                        required>
+                </div>
+                <div class="modal-actions">
+                    <button id="cancelUpload" class="btn secondary">Cancelar</button>
+                    <button id="confirmUpload" class="btn primary">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content" style="text-align: center;">
+            <div class="spinner"></div>
+            <h3 id="loadingText" style="margin-top: 1rem;">Processando...</h3>
+            <p id="loadingSubtext" style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem;">Isso pode levar alguns
+                segundos.</p>
+
+            <!-- Progress Bar -->
+            <div id="progressContainer"
+                style="width: 100%; height: 8px; background: #334155; border-radius: 4px; margin-top: 20px; overflow: hidden;">
+                <div id="progressBar"
+                    style="width: 0%; height: 100%; background: #3b82f6; transition: width 0.3s ease;"></div>
+            </div>
+
+            <!-- Live Logs View -->
+            <div id="uploadLogViewer"
+                style="margin-top: 15px; width: 100%; height: 150px; background: #1e293b; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8rem; color: #94a3b8; overflow-y: auto; text-align: left; border: 1px solid #334155;">
+                <div
+                    style="margin-bottom: 5px; border-bottom: 1px solid #334155; padding-bottom: 5px; display: flex; justify-content: space-between;">
+                    <span>📜 Logs em Tempo Real:</span>
+                    <span id="progressText" style="color: #3b82f6; font-weight: bold;">0%</span>
+                </div>
+                <div id="miniLogContent">Aguardando início...</div>
+            </div>
+
+            <!-- New Close Button -->
+            <button id="closeLoadingBtn" class="btn primary"
+                style="margin-top: 20px; display: none; width: 100%;">Fechar e Atualizar</button>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir este documento? Esta ação não pode ser desfeita.</p>
+            <div class="modal-actions">
+                <button id="cancelDelete" class="btn secondary">Cancelar</button>
+                <button id="confirmDelete" class="btn danger">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inspection Modal (Full Text) -->
+    <div id="inspectModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 80%; max-width: 900px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 id="inspectTitle">Inspeção de Documento</h3>
+                <button class="btn secondary" onclick="closeInspectModal()">Fechar</button>
+            </div>
+            <div id="inspectTextBody"
+                style="flex: 1; background: #0f172a; padding: 20px; border-radius: 6px; overflow-y: auto; color: #e2e8f0; font-family: 'Inter', sans-serif; line-height: 1.6; white-space: pre-wrap; border: 1px solid #334155;">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
+
+
+    <div id="logsModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 85%; max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📜 Logs do Sistema</h3>
+                <button class="btn secondary" onclick="closeLogs()">Fechar</button>
+            </div>
+            <div id="logsContainer"
+                style="flex: 1; background: #0f172a; padding: 1rem; overflow-y: auto; font-family: monospace; color: #a5b4fc; font-size: 0.85rem; border-radius: 6px; border: 1px solid #334155;">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Local Modal -->
+    <div id="scanModal" class="modal hidden">
+        <div class="modal-content"
+            style="width: 90%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📁 Scan de Pasta Local (data/ingest)</h3>
+                <button class="btn secondary" onclick="closeScanModal()">Fechar</button>
+            </div>
+
+            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1rem;">
+                Os arquivos abaixo foram encontrados na pasta local. Escolha o tipo de cada um e clique em "Iniciar
+                Ingestão".
+            </p>
+
+            <div
+                style="margin-bottom: 1rem; display: flex; gap: 10px; align-items: center; background: #0f172a; padding: 10px; border-radius: 6px;">
+                <span style="font-size: 0.85rem; color: #94a3b8;">Definir em bloco:</span>
+                <select id="bulkDocType"
+                    style="background: #1e293b; border: 1px solid #334155; color: white; padding: 5px; border-radius: 4px; font-size: 0.85rem;">
+                    <option value="">-- Selecione --</option>
+                    <option value="lei_ordinaria">📜 Lei Ordinária</option>
+                    <option value="constituicao">⚖️ Constituição</option>
+                    <option value="decreto">📄 Decreto</option>
+                    <option value="portaria">📄 Portaria</option>
+                    <option value="diario_oficial">📰 Diário Oficial</option>
+                    <option value="tabela">📊 Planilha / Tabela</option>
+                </select>
+                <button class="btn secondary" style="padding: 5px 10px; font-size: 0.85rem;"
+                    onclick="applyBulkType()">Aplicar Selecionados</button>
+            </div>
+
+            <div style="flex: 1; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #1e293b; color: #94a3b8; text-align: left;">
+                            <th style="padding: 10px;"><input type="checkbox" id="selectAllScan"
+                                    onclick="toggleAllScan(this)"></th>
+                            <th style="padding: 10px;">Arquivo</th>
+                            <th style="padding: 10px;">Tamanho</th>
+                            <th style="padding: 10px;">Tipo de Ingestão</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scanTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem;">
+                <button onclick="closeScanModal()" class="btn secondary">Cancelar</button>
+                <button onclick="processSelectedScan()" class="btn primary" id="startIngestBtn">Iniciar
+                    Ingestão</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Imports -->
+    <script src="components/toast.js"></script>
+    <script src="components/confirm-modal.js"></script>
+    <script src="components/button-utils.js"></script>
+    <script src="app.js?v=5"></script>
+</body>
+
+</html>

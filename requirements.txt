@@ -8,6 +8,7 @@ aiosqlite>=0.19.0
 python-multipart>=0.0.6
 uvloop>=0.19.0
 # OCR tools (some might need system libs, handled via brew if needed)
+docling>=1.0.0
 pytesseract>=0.3.10
 pdf2image>=1.16.3
 PyPDF2>=3.0.0

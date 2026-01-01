@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Sentinela - Chat Debug</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+        }
+
+        .chat-box {
+            flex: 1;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 1rem;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 1rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 1rem;
+        }
+
+        /* Messages */
+        .msg {
+            padding: 1rem;
+            border-radius: 8px;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .user {
+            align-self: flex-end;
+            background: #3b82f6;
+            color: white;
+        }
+
+        .bot {
+            align-self: flex-start;
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .meta {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 5px;
+            border-top: 1px solid #475569;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container" style="justify-content: center; padding-top: 2rem;">
+        <div class="chat-container">
+            <header>
+                <h2>💬 Chat de Debug</h2>
+                <button onclick="window.close()" class="btn secondary">Fechar</button>
+            </header>
+
+            <div class="chat-box" id="messages">
+                <div class="msg bot">
+                    Olá! Sou o Sentinela (Modo Debug).<br>
+                    Posso acessar todos os documentos indexados. Pergunte algo.
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="userInput" placeholder="Digite sua pergunta..." onkeypress="handleKey(event)">
+                <button onclick="sendMessage()" class="btn primary">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Fontes -->
+    <div id="sourceModal" class="modal hidden"
+        style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center;">
+        <div class="modal-content"
+            style="background: #1e293b; padding: 2rem; border-radius: 12px; max-width: 80%; max-height: 80%; overflow-y: auto; border: 1px solid #334155; position: relative;">
+            <span onclick="closeSourceModal()"
+                style="position: absolute; top: 1rem; right: 1rem; cursor: pointer; color: #94a3b8; font-size: 1.5rem;">&times;</span>
+            <h3 id="modalTitle" style="margin-top: 0; color: #60a5fa;">Título do Documento</h3>
+            <div id="modalMeta"
+                style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #334155;">
+            </div>
+            <div id="modalBody" style="line-height: 1.6; white-space: pre-wrap; font-size: 1rem;">Conteúdo aqui...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const API_URL = '/api/chat/';
+        const msgs = document.getElementById('messages');
+        const input = document.getElementById('userInput');
+        const userId = 'admin_debug_' + Math.random().toString(36).substr(2, 9);
+        let messagesHistory = []; // Array of {role, content}
+        let currentCitations = []; // Armazena citações da última resposta
+
+        // Configure marked to be safe
+        marked.setOptions({
+            sanitize: false,
+            breaks: true
+        });
+
+        function handleKey(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMsg(text, 'user');
+            messagesHistory.push({ role: 'user', content: text });
+            if (messagesHistory.length > 20) messagesHistory.shift();
+
+            input.value = '';
+            input.disabled = true;
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: text,
+                        user_id: userId,
+                        history: messagesHistory.slice(0, -1)
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.detail || 'Erro desconhecido no servidor');
+                }
+
+                const data = await res.json();
+                let content = data.response || 'O Sentinela não retornou uma resposta válida.';
+                messagesHistory.push({ role: 'assistant', content: content });
+                let htmlContent = marked.parse(content);
+
+                // Citações
+                if (data.metadata?.citations?.length > 0) {
+                    const citIndexBase = currentCitations.length;
+                    htmlContent += "<div class='meta'><strong>Fontes (clique para abrir):</strong><ul style='list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;'>";
+
+                    data.metadata.citations.forEach((c, i) => {
+                        const globalIndex = citIndexBase + i;
+                        currentCitations.push(c);
+
+                        // Determina o Título/Capítulo para o label curto
+                        let label = c.filename;
+                        if (c.titulo) label = c.titulo;
+                        if (c.capitulo) label = c.capitulo;
+                        if (c.article_index) label += ` - Art. ${c.article_index}`;
+
+                        htmlContent += `<li><a href="#" onclick="openSource(${globalIndex}); return false;" style="color: #60a5fa; text-decoration: none; background: #0f172a; padding: 4px 8px; border-radius: 4px; border: 1px solid #334155; font-size: 0.75rem;">${label}</a></li>`;
+                    });
+                    htmlContent += "</ul></div>";
+                }
+
+                addMsg(htmlContent, 'bot', true);
+            } catch (e) {
+                addMsg(`Erro: ${e.message}`, 'bot');
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        function addMsg(html, type, isHtml = false) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            if (isHtml) div.innerHTML = html;
+            else div.textContent = html;
+            msgs.appendChild(div);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        // Funções do Modal
+        function openSource(index) {
+            const src = currentCitations[index];
+            if (!src) return;
+
+            document.getElementById('modalTitle').textContent = src.titulo || src.law_name || src.filename;
+
+            let metaHtml = `<strong>Arquivo:</strong> ${src.filename} | `;
+            if (src.capitulo) metaHtml += `<strong>${src.capitulo}</strong> | `;
+            if (src.secao) metaHtml += `<strong>${src.secao}</strong> | `;
+            if (src.article_index) metaHtml += `<strong>Artigo ${src.article_index}</strong>`;
+
+            document.getElementById('modalMeta').innerHTML = metaHtml;
+            document.getElementById('modalBody').textContent = src.content || "Conteúdo não disponível.";
+
+            const modal = document.getElementById('sourceModal');
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
+
+        function closeSourceModal() {
+            const modal = document.getElementById('sourceModal');
+            modal.style.display = 'none';
+            modal.classList.add('hidden');
+        }
+    </script>
+</body>
+
+</html>

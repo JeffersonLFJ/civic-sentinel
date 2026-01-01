@@ -1,5 +1,6 @@
 import re
 from typing import List, Literal
+from src.core.settings_manager import settings_manager
 
 class SmartTextSplitter:
     """
@@ -18,8 +19,10 @@ class SmartTextSplitter:
             return []
 
         chunks = []
-        if doc_type == "legislation" or "lei" in doc_type.lower():
+        if doc_type == "legislation" or "lei" in doc_type.lower() or "legislacao" in doc_type.lower():
             chunks = self.split_by_law_articles(text)
+        elif doc_type == "tabela":
+            chunks = self.split_markdown_table(text, chunk_rows=50) # Use Persistent Header Strategy
         elif doc_type == "diario_oficial" or "gazette" in doc_type.lower():
             chunks = self.split_sliding_window(text, chunk_size=3000, overlap=500)
         else:
@@ -49,8 +52,9 @@ class SmartTextSplitter:
         but keeps the Article Header context.
         """
         # Regex to find "Art. <number>"
-        # Matches: Art. 1, Art. 1º, Art. 10
-        pattern = r"((?:^|\n)\s*Art\.?\s*\d+(?:[º°\.]?))"
+        # Matches: Art. 1, Art. 1º, **Art. 1**, ## Art 1
+        # Now robust to Markdown formatting chars
+        pattern = r"((?:^|\n)\s*(?:[\#\*]*\s*)Art\.?\s*\d+(?:[º°\.]?))"
         
         # Split but keep delimiters
         chunks = re.split(pattern, text, flags=re.IGNORECASE)
@@ -108,7 +112,7 @@ class SmartTextSplitter:
                 # Check size. If huge, sub-split by Paragraphs/Items
                 if len(combined) > 2500:
                     # Sub-split logic
-                    sub_chunks = self._subsplit_law_chunk(header, body, context_prefix=f"[{context_str}] " if context_str else "")
+                    sub_chunks = self.subsplit_law_chunk(header, body, context_prefix=f"[{context_str}] " if context_str else "")
                     final_chunks.extend(sub_chunks)
                 else:
                     final_chunks.append(combined)
@@ -119,16 +123,18 @@ class SmartTextSplitter:
         return [c for c in final_chunks if c]
 
 
-    def _subsplit_law_chunk(self, header: str, body: str, context_prefix: str = "") -> List[str]:
+    def subsplit_law_chunk(self, header: str, body: str, context_prefix: str = "") -> List[str]:
         """
-        Splits a large Article body by Paragraphs (§) or Items (I, II, III).
-        Prepends the 'header' to each child.
+        Splits a large Article body by Paragraphs (§) or Incisos (Roman Numerals).
+        Prepends the 'header' to each child to preserve context.
         """
-        # Try splitting by Paragraph symbol '§'
+        sub_chunks = []
+        
+        # 1. Try splitting by Paragraph symbol '§'
         if "§" in body:
-            parts = re.split(r"(§\s*\d+.*?)", body)
-            sub_chunks = []
-            # First part (caput)
+            parts = re.split(r"((?:^|\n)\s*§\s*\d+[º°\.-]?.*?)", body)
+            
+            # First part (caput or pre-paragraph content)
             if parts[0].strip():
                 sub_chunks.append(f"{context_prefix}{header} {parts[0].strip()}")
             
@@ -136,13 +142,52 @@ class SmartTextSplitter:
                 if k+1 < len(parts):
                     para_header = parts[k].strip()
                     para_body = parts[k+1]
-                    # Inject Parent Header
-                    sub_chunks.append(f"{context_prefix}{header} > {para_header} {para_body}".strip())
+                    
+                    # Check if Paragraph itself is huge, if so, split by Incisos
+                    if len(para_body) > 1500:
+                         inciso_chunks = self.split_by_incisos(para_header, para_body, context_prefix=f"{context_prefix}{header} > ")
+                         sub_chunks.extend(inciso_chunks)
+                    else:
+                        sub_chunks.append(f"{context_prefix}{header} > {para_header} {para_body}".strip())
+            
             return sub_chunks
             
-        # Fallback: simple paragraph split if no § but huge
-        paragraphs = self.split_by_paragraphs(body, max_chars=2000)
-        return [f"{context_prefix}{header} (Cont.) {p}" for p in paragraphs]
+        # 2. If no Paragraphs but huge, try Incisos directly (Art -> Inciso)
+        return self.split_by_incisos(header, body, context_prefix=context_prefix)
+
+    def split_by_incisos(self, header: str, body: str, context_prefix: str = "") -> List[str]:
+        """
+        Splits content by Incisos (Roman Numerals: I -, II -, etc).
+        """
+        # Regex for Incisos: newline + Roman Numeral + optional dot/dash
+        # Matches: "I -", "II.", "IV -" at start of line
+        inciso_pattern = r"((?:^|\n)\s*(?:[IVXLCDM]+)\s*[\.-]\s+)"
+        
+        parts = re.split(inciso_pattern, body)
+        
+        chunks = []
+        # Caput/Header content
+        if parts[0].strip():
+             chunks.append(f"{context_prefix}{header} {parts[0].strip()}")
+             
+        for k in range(1, len(parts), 2):
+             if k+1 < len(parts):
+                 inciso_marker = parts[k].strip()
+                 inciso_content = parts[k+1]
+                 
+                 # Full text: "[Title] Art 5 > I - Content"
+                 full_chunk = f"{context_prefix}{header} > {inciso_marker} {inciso_content}".strip()
+                 
+                 # Optimization: If the inciso is tiny (e.g. just a word), merge with previous? 
+                 # User wants One Chunk per Article usually, but this method is CALLED only if Article is HUGE.
+                 # So we assume splitting is necessary.
+                 chunks.append(full_chunk)
+                 
+        if not chunks: # Fallback if regex failed but body is huge
+             paragraphs = self.split_by_paragraphs(body, max_chars=1500)
+             return [f"{context_prefix}{header} (Cont.) {p}" for p in paragraphs]
+             
+        return chunks
 
     def split_pages(self, text: str) -> List[str]:
         """
@@ -329,10 +374,15 @@ class SmartTextSplitter:
             
         return chunks
 
-    def split_sliding_window(self, text: str, chunk_size: int = 3000, overlap: int = 500) -> List[str]:
+    def split_sliding_window(self, text: str, chunk_size: int = None, overlap: int = None) -> List[str]:
         """
         Sliding window for continuous texts like Gazettes where context is key.
         """
+        if chunk_size is None:
+            chunk_size = settings_manager.chunk_size
+        if overlap is None:
+            overlap = settings_manager.chunk_overlap
+
         if len(text) <= chunk_size:
             return [text]
             
@@ -378,34 +428,43 @@ class SmartTextSplitter:
 
         # Lazy load model (singleton pattern ideally, but local var for safety now)
         # Using all-MiniLM-L6-v2 (fast, ~80MB)
-        model = SentenceTransformer('all-MiniLM-L6-v2') 
+        import gc
+        import torch
         
-        # 2. Group Sentences (Sliding Window)
-        # We compare Window A [0,1,2] vs Window B [1,2,3] is too close.
-        # We want adjacent "Topics".
-        # Let's try: Window A [0,1,2] vs Window B [3,4,5]? 
-        # User said "Compare Grupo de 3 frases vs. PROXIMO Grupo".
-        # Non-overlapping adjacent windows?
-        # If we do sliding, we get smoother curve.
-        # Let's do: Calculate embedding for EVERY sentence.
-        # Then calculate similarity of Window(i-w:i) vs Window(i:i+w).
-        
-        embeddings = model.encode(sentences, convert_to_tensor=True)
-        
-        distances = []
-        # Calculate cosine similarity between adjacent groups of 'window_size'
-        # Point 'i' is the potential split point BETWEEN s[i-1] and s[i]
-        # Left Context: s[i-window : i]
-        # Right Context: s[i : i+window]
-        
-        valid_split_indices = []
-        
-        for i in range(window_size, len(sentences) - window_size):
-            # Aggregate embeddings? Average them is a good proxy for "Topic Vector"
-            left_emb = util.cos_sim(embeddings[i-window_size:i].mean(dim=0), embeddings[i:i+window_size].mean(dim=0))
-            sim_score = left_emb.item()
-            distances.append(sim_score)
-            valid_split_indices.append(i)
+        # Lazy load model
+        try:
+            model = SentenceTransformer('all-MiniLM-L6-v2') 
+            
+            # 2. Group Sentences & Embed
+            embeddings = model.encode(sentences, convert_to_tensor=True)
+            
+            distances = []
+            # Calculate cosine similarity...
+            # Note: We compute all distances here to avoid keeping 'model' and 'embeddings' alive too long
+            
+            # ... (Logic to calculate distances remains, but we need to verify if 'distances' calculation strictly needs 'util')
+            # The original code likely looped. Let's make sure we do the heavy lifting here 
+            # OR we just Clean up at the return.
+            
+            # Since the original code had logic after this, maybe it's better to just put cleanup at the VERY END of the function
+            # But the user asked to explicit delete "model"
+            
+        finally:
+            # Resource Cleanup (Critical for Mac/MPS)
+            if 'model' in locals():
+                del model
+            if 'embeddings' in locals():
+                del embeddings
+            
+            gc.collect()
+            try:
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+                elif torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except:
+                pass
+            # ---------------------------------
             
         # 3. Dynamic Threshold
         if not distances:

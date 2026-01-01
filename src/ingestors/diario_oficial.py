@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import logging
 import os
 import tempfile
-from src.core.ocr_engine import ocr_engine
+from src.ingestors.docling_processor import docling_processor
 
 logger = logging.getLogger(__name__)
 
@@ -153,15 +153,16 @@ class QueridoDiarioIngestor:
                             tmp_path = tmp.name
                             
                         try:
-                            # Executa o motor de OCR (que já lida com cascata de PDF Direto -> Tesseract -> Fallback Vision)
-                            ocr_results = await ocr_engine.process_document(tmp_path, doc_type="diario_oficial")
+
+                            # Executa o Docling para capturar texto estruturado (Markdown)
+                            ocr_results = await docling_processor.process(tmp_path)
                             full_text = ocr_results.get("extracted_text", "")
-                            ocr_method = ocr_results.get("ocr_method", "ocr_fallback")
+                            ocr_method = ocr_results.get("ocr_method", "docling")
                         finally:
                             if os.path.exists(tmp_path):
                                 os.remove(tmp_path)
                     except Exception as e:
-                        logger.error(f"Falha ao processar PDF/OCR de {g['date']}: {e}")
+                        logger.error(f"Falha ao processar PDF/Docling de {g['date']}: {e}")
             
             if not full_text:
                 logger.warning(f"Ignorando {g['date']} - Sem texto extraível disponível na API ou via OCR.")

@@ -71,7 +71,7 @@ class LocalFolderIngestor:
                 # Se o usuário não enviou a esfera, manda 'unknown' para disparar as heurísticas automáticas
                 sphere = item.get("sphere", Sphere.DESCONHECIDA.value)
                 
-                await process_document_task(str(file_path), filename, "local_ingest", doc_type, sphere)
+                await process_document_task(str(file_path), filename, "local_ingest", doc_type, sphere, tags=item.get("tags", ""))
                 
                 results["processed"] += 1
                 

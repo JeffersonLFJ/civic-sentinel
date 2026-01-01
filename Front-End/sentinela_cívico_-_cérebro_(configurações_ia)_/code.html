@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinela Cívico - Configurações do Cérebro</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#19cc55",
+                        "background-light": "#f6f8f6",
+                        "background-dark": "#112116",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1A2C22",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem", 
+                        "xl": "2rem",
+                        "2xl": "2.5rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(25, 204, 85, 0.05)',
+                        'glow': '0 0 15px rgba(25, 204, 85, 0.3)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #d1d5db; 
+            border-radius: 20px;
+        }
+        .dark textarea::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+        }.neural-bg {
+            background-image: radial-gradient(#19cc55 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.05;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#111813] dark:text-white font-display transition-colors duration-300">
+<div class="fixed inset-0 neural-bg pointer-events-none z-0"></div>
+<div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden z-10">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-[#e5ece8] dark:border-[#2a3830] px-10 py-4 bg-surface-light/80 dark:bg-surface-dark/80 backdrop-blur-md sticky top-0 z-50">
+<div class="flex items-center gap-4 text-primary">
+<div class="size-8 flex items-center justify-center rounded-full bg-primary/10">
+<span class="material-symbols-outlined text-primary" style="font-size: 24px;">psychology</span>
+</div>
+<h2 class="text-[#111813] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Sentinela Cívico</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<div class="hidden md:flex items-center gap-9">
+<a class="text-[#637569] dark:text-[#a0b0a6] text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Documentos</a>
+<a class="text-[#637569] dark:text-[#a0b0a6] text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Quarentena</a>
+<a class="text-[#637569] dark:text-[#a0b0a6] text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Inspetor de Dados</a>
+<a class="text-[#637569] dark:text-[#a0b0a6] text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Auditoria</a>
+<a class="text-primary text-sm font-bold leading-normal relative after:content-[''] after:absolute after:-bottom-6 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-primary after:rounded-full" href="#">Cérebro</a>
+</div>
+<div class="flex items-center gap-4">
+<a class="flex items-center justify-center size-10 rounded-full bg-[#f0f4f2] dark:bg-[#25362b] text-[#111813] dark:text-white hover:bg-primary/20 hover:text-primary transition-colors" href="#" title="Voltar ao Chat">
+<span class="material-symbols-outlined" style="font-size: 20px;">chat</span>
+</a>
+<button class="flex items-center justify-center size-10 rounded-full bg-[#f0f4f2] dark:bg-[#25362b] text-[#111813] dark:text-white hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined" style="font-size: 20px;">settings</span>
+</button>
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-10 border-2 border-white dark:border-[#25362b] shadow-sm" data-alt="Profile picture of the administrator" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAnfUzqvECB0KAsT-i1CuKhe_1iaSE-HFzVjNmJ-mGTduKjXhUO3YgIqskx_UfVjoHV6uuks08v_HdR_mb4ZKZVwfHpSd-XVW_HQg305vNwtqIKP9_HbOZ1Wyl4tTo6S4vvvPWgUbka1W6mmZ4asRO4EIrdnSsCLEdjQ8_3_ZII8-ZBp7KI69tpDIhGdcZFxTS3P-XUk3jl05JYtTQQfq4vyRArdYyCWgIVki0SEcyPq1aVU_Wr8da7Ll10JGEZwMwIjmuCGjBGbcuT");'></div>
+</div>
+</div>
+</header>
+<main class="layout-container flex flex-col grow px-6 md:px-20 lg:px-40 py-8">
+<div class="layout-content-container flex flex-col max-w-[1200px] w-full mx-auto flex-1 gap-8">
+<div class="flex flex-wrap items-end justify-between gap-4 pb-2">
+<div class="flex flex-col gap-2">
+<h1 class="text-[#111813] dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">Configurações do Cérebro</h1>
+<p class="text-[#63886f] dark:text-[#8baaa0] text-base font-normal leading-normal max-w-2xl">
+                            Ajuste os parâmetros sinápticos, memória e comportamento da Inteligência Artificial para otimizar as respostas aos cidadãos.
+                        </p>
+</div>
+<button class="group flex items-center justify-center overflow-hidden rounded-full h-11 pl-4 pr-5 bg-white dark:bg-surface-dark border border-[#e5ece8] dark:border-[#2a3830] text-[#111813] dark:text-white hover:border-primary/50 hover:shadow-soft transition-all duration-300">
+<span class="material-symbols-outlined mr-2 text-[#63886f] group-hover:text-primary transition-colors" style="font-size: 20px;">history_edu</span>
+<span class="text-sm font-bold leading-normal">Log do Sistema</span>
+</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<div class="lg:col-span-7 flex flex-col gap-6">
+<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-transparent dark:border-[#2a3830]">
+<div class="flex items-center gap-3 mb-6">
+<div class="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">neurology</span>
+</div>
+<div>
+<h3 class="text-lg font-bold text-[#111813] dark:text-white">Parâmetros Cognitivos (LLM)</h3>
+<p class="text-xs text-[#63886f] dark:text-[#8baaa0]">Controla a criatividade e o contexto do modelo.</p>
+</div>
+</div>
+<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-sm font-semibold text-[#111813] dark:text-[#e0e0e0]">Temperatura (Criatividade)</label>
+<span class="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-md">0.7</span>
+</div>
+<div class="h-2 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer group">
+<div class="absolute h-full bg-primary rounded-full w-[70%]"></div>
+<div class="absolute h-4 w-4 bg-white border-2 border-primary rounded-full top-1/2 -translate-y-1/2 left-[70%] shadow-md group-hover:scale-110 transition-transform"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-sm font-semibold text-[#111813] dark:text-[#e0e0e0]">Top K (Diversidade)</label>
+<span class="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-md">40</span>
+</div>
+<div class="h-2 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer group">
+<div class="absolute h-full bg-primary rounded-full w-[40%]"></div>
+<div class="absolute h-4 w-4 bg-white border-2 border-primary rounded-full top-1/2 -translate-y-1/2 left-[40%] shadow-md group-hover:scale-110 transition-transform"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-[#111813] dark:text-[#e0e0e0]">Janela de Contexto (Tokens)</label>
+<div class="flex items-center gap-3">
+<div class="relative flex-1">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[#63886f] text-[20px]">memory</span>
+<input class="w-full h-10 pl-10 pr-4 rounded-full bg-[#f6f8f6] dark:bg-[#25362b] border-none text-sm font-medium focus:ring-2 focus:ring-primary dark:text-white" placeholder="Ex: 4096" type="number" value="4096"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-transparent dark:border-[#2a3830]">
+<div class="flex items-center gap-3 mb-6">
+<div class="size-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500">
+<span class="material-symbols-outlined">library_books</span>
+</div>
+<div>
+<h3 class="text-lg font-bold text-[#111813] dark:text-white">Memória e Busca (RAG)</h3>
+<p class="text-xs text-[#63886f] dark:text-[#8baaa0]">Ajustes de recuperação de documentos e relevância.</p>
+</div>
+</div>
+<div class="flex flex-col gap-6">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-xs font-semibold uppercase tracking-wider text-[#63886f]">Documentos (Top K)</label>
+<span class="text-xs font-bold text-[#111813] dark:text-white">4</span>
+</div>
+<div class="h-1.5 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer">
+<div class="absolute h-full bg-orange-400 rounded-full w-[20%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-xs font-semibold uppercase tracking-wider text-[#63886f]">Relevância Mín.</label>
+<span class="text-xs font-bold text-[#111813] dark:text-white">0.75</span>
+</div>
+<div class="h-1.5 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer">
+<div class="absolute h-full bg-orange-400 rounded-full w-[75%]"></div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-sm font-semibold text-[#111813] dark:text-[#e0e0e0]">Limiar de Escuta Ativa</label>
+<span class="text-sm font-mono text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-md">0.60</span>
+</div>
+<p class="text-xs text-[#63886f] mb-1">Define quando a IA deve pedir esclarecimentos antes de responder.</p>
+<div class="h-2 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer group">
+<div class="absolute h-full bg-orange-500 rounded-full w-[60%]"></div>
+<div class="absolute h-4 w-4 bg-white border-2 border-orange-500 rounded-full top-1/2 -translate-y-1/2 left-[60%] shadow-md group-hover:scale-110 transition-transform"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-5 flex flex-col gap-6">
+<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-transparent dark:border-[#2a3830]">
+<div class="flex items-center gap-3 mb-4">
+<div class="size-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+</div>
+<h3 class="text-base font-bold text-[#111813] dark:text-white">Validação de Entrada</h3>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="text-sm font-medium text-[#111813] dark:text-[#e0e0e0]">OCR Confidence Threshold</label>
+<span class="text-xs font-bold text-blue-500">85%</span>
+</div>
+<div class="h-1.5 w-full bg-[#eef3f0] dark:bg-[#2a3830] rounded-full relative cursor-pointer">
+<div class="absolute h-full bg-blue-500 rounded-full w-[85%]"></div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4 flex-1">
+<div class="flex-1 bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-transparent dark:border-[#2a3830] flex flex-col">
+<div class="flex items-center justify-between mb-3">
+<label class="text-sm font-bold text-[#111813] dark:text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-[#63886f]">description</span>
+                                        System Prompt
+                                    </label>
+<span class="text-[10px] uppercase tracking-wider font-bold text-[#63886f] bg-[#f0f4f2] dark:bg-[#25362b] px-2 py-1 rounded-full">Core</span>
+</div>
+<textarea class="w-full flex-1 min-h-[160px] bg-[#f8faf9] dark:bg-[#15231b] rounded-xl border border-[#e5ece8] dark:border-[#2a3830] p-4 text-sm leading-relaxed text-[#111813] dark:text-[#d1d5db] focus:ring-2 focus:ring-primary focus:border-transparent resize-none font-mono" placeholder="Defina a personalidade e regras fundamentais da IA aqui...">Você é o Sentinela Cívico, um assistente virtual especializado em direitos do cidadão, serviços comunitários e legislação local. Suas respostas devem ser empáticas, claras e estritamente baseadas nos documentos fornecidos pelo contexto. Nunca invente leis.</textarea>
+</div>
+<div class="flex-1 bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-transparent dark:border-[#2a3830] flex flex-col">
+<div class="flex items-center justify-between mb-3">
+<label class="text-sm font-bold text-[#111813] dark:text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-[#63886f]">target</span>
+                                        Intent Prompt
+                                    </label>
+<span class="text-[10px] uppercase tracking-wider font-bold text-[#63886f] bg-[#f0f4f2] dark:bg-[#25362b] px-2 py-1 rounded-full">Router</span>
+</div>
+<textarea class="w-full flex-1 min-h-[120px] bg-[#f8faf9] dark:bg-[#15231b] rounded-xl border border-[#e5ece8] dark:border-[#2a3830] p-4 text-sm leading-relaxed text-[#111813] dark:text-[#d1d5db] focus:ring-2 focus:ring-primary focus:border-transparent resize-none font-mono" placeholder="Instruções para classificar a intenção do usuário...">Analise a entrada do usuário e classifique em uma das seguintes categorias: [DUVIDA_JURIDICA], [SERVICO_PUBLICO], [DENUNCIA], [OUTROS]. Retorne apenas a categoria em formato JSON.</textarea>
+</div>
+</div>
+</div>
+</div>
+<div class="sticky bottom-6 z-40 mt-4">
+<div class="bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-lg rounded-full shadow-lg border border-[#e5ece8] dark:border-[#2a3830] p-2 pr-2 flex flex-col md:flex-row items-center justify-between gap-4 mx-auto max-w-[900px]">
+<div class="flex items-center gap-2 px-2 w-full md:w-auto justify-center md:justify-start">
+<button class="flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-transparent hover:border-red-100">
+<span class="material-symbols-outlined text-[18px]">database</span>
+                                Limpar Cache ChromaDB
+                            </button>
+<div class="h-6 w-px bg-gray-200 dark:bg-gray-700 hidden md:block"></div>
+<button class="flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold text-[#63886f] hover:text-[#111813] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                                Reverter ao Padrão
+                            </button>
+</div>
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="text-xs text-[#63886f] hidden sm:block text-right leading-tight mr-2">
+                                Última alteração<br/>
+<span class="font-bold">Hoje, 14:30</span>
+</div>
+<button class="flex-1 md:flex-none cursor-pointer items-center justify-center overflow-hidden rounded-full h-11 px-8 bg-primary hover:bg-green-600 text-white shadow-lg hover:shadow-green-500/30 transition-all duration-300">
+<span class="text-sm font-bold leading-normal tracking-[0.015em]">Salvar Configurações</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>

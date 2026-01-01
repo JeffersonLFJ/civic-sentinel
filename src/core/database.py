@@ -143,9 +143,12 @@ class DatabaseManager:
             ocr_method TEXT,
             url TEXT, -- Source URL for citations (e.g. Querido Diário)
             publication_date DATE, -- Official publication date
-            doc_type TEXT DEFAULT 'generico', -- 'lei', 'diario_oficial', 'tabela'
+            doc_type TEXT DEFAULT 'pending_classification', -- 'lei', 'diario_oficial', 'tabela'
             sphere TEXT DEFAULT 'unknown', -- 'federal', 'estadual', 'municipal'
-            status TEXT DEFAULT 'active', -- 'active' or 'pending' (staging)
+            status TEXT DEFAULT 'pending', -- 'pending', 'queued', 'active'
+            ementa TEXT,
+            description TEXT,
+            custom_tags TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -205,6 +208,12 @@ class DatabaseManager:
                 ("ALTER TABLE documents ADD COLUMN doc_type TEXT DEFAULT 'generico'", "doc_type"),
                 ("ALTER TABLE documents ADD COLUMN sphere TEXT DEFAULT 'unknown'", "sphere"),
                 ("ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'active'", "status"),
+                 # New columns
+                ("ALTER TABLE documents ADD COLUMN ementa TEXT", "ementa"),
+                ("ALTER TABLE documents ADD COLUMN description TEXT", "description"),
+                ("ALTER TABLE documents ADD COLUMN custom_tags TEXT", "custom_tags"),
+                ("ALTER TABLE documents ADD COLUMN initial_chunks_json TEXT", "initial_chunks_json"),
+                
                 ("ALTER TABLE audit_logs ADD COLUMN query TEXT", "query"),
                 ("ALTER TABLE audit_logs ADD COLUMN response TEXT", "response"),
                 ("ALTER TABLE audit_logs ADD COLUMN sources_json TEXT", "sources_json")
@@ -216,56 +225,36 @@ class DatabaseManager:
                 except Exception:
                     pass # Column exists or table newly created
             
-            # Drop obsolete column
-            try:
-                await cursor.execute("ALTER TABLE documents DROP COLUMN urgency_level")
-            except Exception:
-                pass
+            # ...
 
-            await self._sqlite_connection.commit()
+    async def log_audit(self, action: str, user_hash: str, details: str = None, 
+                        query_text: str = None, response_text: str = None, 
+                        sources_json: str = None, confidence_score: float = 0.0):
+        """
+        Logs a user action or system event to audit_logs table.
+        """
+        try:
+            if not self._sqlite_connection:
+                await self.get_sqlite()
+                
+            import uuid
+            log_id = str(uuid.uuid4())
+            
+            query = """
+            INSERT INTO audit_logs (id, action, user_hash, details, query, response, sources_json, confidence_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            
+            async with self._sqlite_connection.cursor() as cursor:
+                await cursor.execute(query, (
+                    log_id, action, user_hash, details, 
+                    query_text, response_text, sources_json, confidence_score
+                ))
+                await self._sqlite_connection.commit()
+        except Exception as e:
+            logger.error(f"❌ Database Log Failure: {e}")
+            # Do not raise to prevent breaking the flow
 
-    async def register_user_if_not_exists(self, user_hash: str):
-        """
-        Idempotent registration of anonymized user.
-        """
-        if not self._sqlite_connection:
-            await self.get_sqlite()
-            
-        async with self._sqlite_connection.execute(
-            "INSERT OR IGNORE INTO users (id) VALUES (?)", (user_hash,)
-        ) as cursor:
-            await self._sqlite_connection.commit()
-
-    async def log_audit(self, action: str, user_hash: str, details: str = None, query_text: str = None, response_text: str = None, sources_json: str = None, confidence_score: float = None):
-        """
-        Logs an action to the audit trail with support for detailed RAG inspection.
-        """
-        if not self._sqlite_connection:
-            await self.get_sqlite()
-            
-        import uuid
-        log_id = str(uuid.uuid4())
-        
-        sql = """
-        INSERT INTO audit_logs (id, action, details, user_hash, confidence_score, query, response, sources_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        params = (log_id, action, details, user_hash, confidence_score, query_text, response_text, sources_json)
-        
-        async with self._sqlite_connection.execute(sql, params) as cursor:
-            await self._sqlite_connection.commit()
-            return log_id
-            
-    async def clear_audit_logs(self):
-        """
-        Clears all records from audit_logs table.
-        """
-        if not self._sqlite_connection:
-            await self.get_sqlite()
-            
-        async with self._sqlite_connection.execute("DELETE FROM audit_logs") as cursor:
-            await self._sqlite_connection.commit()
-            return cursor.rowcount
 
     async def save_document_record(self, doc_data: Dict[str, Any]):
         """
@@ -276,13 +265,22 @@ class DatabaseManager:
             await self.get_sqlite()
             
         import uuid
+        import json
         doc_id = doc_data.get("id") or str(uuid.uuid4())
         
+        # Serialize chunks if present
+        initial_chunks_str = None
+        if doc_data.get("initial_chunks"):
+            try:
+                initial_chunks_str = json.dumps(doc_data["initial_chunks"], ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"Failed to serialize initial chunks for {doc_id}: {e}")
+
         query = """
         INSERT INTO documents (
-            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type, sphere, status
+            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type, sphere, status, ementa, description, custom_tags, initial_chunks_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         params = (
@@ -294,18 +292,30 @@ class DatabaseManager:
             doc_data.get("ocr_method", "manual"),
             doc_data.get("url"),
             doc_data.get("publication_date"),
-            doc_data.get("doc_type", "generico"),
+            doc_data.get("doc_type", "pending_classification"), # Default pending
             doc_data.get("sphere", "unknown"),
-            doc_data.get("status", "active")
+            doc_data.get("status", "pending"),
+            doc_data.get("ementa"),
+            doc_data.get("description"),
+            doc_data.get("custom_tags"),
+            initial_chunks_str
         )
         
         async with self._sqlite_connection.execute(query, params) as cursor:
             pass 
             
         if doc_data.get("text_content"):
+            # Update FTS to include new semantic fields
+            # Combining content + ementa + description for search
+            full_search_text = doc_data["text_content"]
+            if doc_data.get("ementa"):
+                 full_search_text += f"\n[EMENTA: {doc_data['ementa']}]"
+            if doc_data.get("description"):
+                 full_search_text += f"\n[DESCRIÇÃO: {doc_data['description']}]"
+
             await self._sqlite_connection.execute(
                 "INSERT INTO documents_fts (id, text_content, filename, source) VALUES (?, ?, ?, ?)",
-                (doc_id, doc_data["text_content"], doc_data["filename"], doc_data["source"])
+                (doc_id, full_search_text, doc_data["filename"], doc_data["source"])
             )
         
         await self._sqlite_connection.commit()
@@ -583,7 +593,7 @@ class DatabaseManager:
         if not self._sqlite_connection:
             await self.get_sqlite()
             
-        query = "SELECT id, filename, source, doc_type, sphere, publication_date, created_at FROM documents WHERE status = 'pending' ORDER BY created_at DESC"
+        query = "SELECT id, filename, source, doc_type, sphere, publication_date, created_at, custom_tags FROM documents WHERE status = 'pending' ORDER BY created_at DESC"
         async with self._sqlite_connection.execute(query) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -597,8 +607,9 @@ class DatabaseManager:
             
         fields = []
         params = []
+        allowed_keys = ["doc_type", "sphere", "publication_date", "ementa", "description", "custom_tags", "status"]
         for key, value in updates.items():
-            if key in ["doc_type", "sphere", "publication_date"]:
+            if key in allowed_keys:
                 fields.append(f"{key} = ?")
                 params.append(value)
         
@@ -619,47 +630,89 @@ class DatabaseManager:
         if not self._sqlite_connection:
             await self.get_sqlite()
             
-        start_time = time.perf_counter()
-        
-        # Build Query String
-        if isinstance(query, list):
-            # Clean and join with OR
-            clean_terms = [t.replace('"', '').replace("'", "") for t in query if t.strip()]
-            if not clean_terms:
-                return []
-            # FTS5 syntax: term1 OR term2
-            fts_query_str = " OR ".join([f'"{t}"' for t in clean_terms])
-        else:
-            # Legacy string fallback
-            fts_query_str = f'"{query}"'
+        try:
+            # 1. Fetch document data
+            doc = await self.get_document_by_id(doc_id)
+            if not doc:
+                logger.error(f"Cannot activate document {doc_id}: Not found.")
+                return False
 
-        # FTS5 Query
-        # We match against the virtual table but join with real table for metadata
-        
-        # 2. Index in ChromaDB
-        # We need final_meta_type logic usually, but here we use what's in the DB (already refined or corrected by user)
-        base_meta = {
-            "source": doc["source"], 
-            "filename": doc["filename"], 
-            "doc_type": doc["doc_type"],
-            "sphere": doc["sphere"],
-            "status": "active"
-        }
-        
-        # Simple indexing (as in upload.py)
-        await self.index_document_text(
-            doc_id=doc_id, 
-            text=doc["text_content"],
-            metadata=base_meta
-        )
-        
-        # 3. Update status to 'active'
-        async with self._sqlite_connection.execute("UPDATE documents SET status = 'active' WHERE id = ?", (doc_id,)) as cursor:
-            pass
-        await self._sqlite_connection.commit()
-        
-        logger.info(f"✅ Documento {doc_id} ATIVADO e indexado com sucesso.")
-        return True
+            # 2. Index in ChromaDB
+            base_meta = {
+                "source": doc["source"], 
+                "filename": doc["filename"], 
+                "doc_type": doc["doc_type"],
+                "sphere": doc["sphere"],
+                "status": "active",
+                "ementa": doc.get("ementa") or "",
+                "description": doc.get("description") or "",
+                "custom_tags": doc.get("custom_tags") or ""
+            }
+            
+            # Check for stored initial chunks (e.g. from LawScraper HTML)
+            import json
+            if doc.get("initial_chunks_json"):
+                try:
+                    logger.info(f"🔎 Found optimized stored chunks for {doc_id}. Using them.")
+                    initial_chunks = json.loads(doc["initial_chunks_json"])
+                    await self.index_pre_chunked_data(doc_id, initial_chunks, base_meta)
+                except Exception as e:
+                    logger.error(f"Failed to use stored chunks for {doc_id}: {e}. Falling back to text splitting.")
+                    if doc["text_content"]:
+                        await self.index_document_text(
+                            doc_id=doc_id, 
+                            text=doc["text_content"],
+                            metadata=base_meta
+                        )
+            # Standard Path
+            elif doc["text_content"]:
+                await self.index_document_text(
+                    doc_id=doc_id, 
+                    text=doc["text_content"],
+                    metadata=base_meta
+                )
+            else:
+                logger.warning(f"Document {doc_id} has no text content to index.")
+
+            # 2.1 Index Summary/Ementa as a separate Semantic Chunk
+            # This ensures that searching for the concept of the law (Ementa) retrieves a chunk pointing to it.
+            summary_text = ""
+            if doc.get("ementa"):
+                summary_text += f"EMENTA: {doc['ementa']}\n"
+            if doc.get("description"):
+                summary_text += f"DESCRIÇÃO: {doc['description']}"
+            
+            if summary_text.strip():
+                try:
+                    collection = self.chroma_client.get_or_create_collection("sentinela_documents")
+                    summary_id = f"{doc_id}_summary"
+                    
+                    summary_meta = base_meta.copy()
+                    summary_meta["parent_type"] = "summary"
+                    summary_meta["chunk_index"] = -1 # Special index for summary
+                    summary_meta["original_doc_id"] = doc_id
+                    # Parent ID points to doc itself (conceptually) or empty since it has no parent text block
+                    summary_meta["parent_id"] = f"{doc_id}_parent_0" # Point to first parent as fallback context
+                    
+                    collection.add(
+                        ids=[summary_id],
+                        documents=[summary_text],
+                        metadatas=[summary_meta]
+                    )
+                    logger.info(f"Summary chunk indexed for {doc_id}")
+                except Exception as sc_e:
+                    logger.error(f"Failed to index summary chunk: {sc_e}")
+            
+            # 3. Update status to 'active'
+            async with self._sqlite_connection.execute("UPDATE documents SET status = 'active' WHERE id = ?", (doc_id,)) as cursor:
+                pass
+            await self._sqlite_connection.commit()
+            
+            logger.info(f"✅ Documento {doc_id} ATIVADO e indexado com sucesso.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to activate document {doc_id}: {e}")
+            return False
 
     async def get_context_window(self, doc_id: str, center_index: int, window_size: int = 1) -> str:
         """
@@ -791,6 +844,33 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error(f"Failed to clear vector store: {e}")
+            return False
+
+    async def purge_full_system(self) -> bool:
+        """
+        DANGER: Clears ALL data (Vectors + SQLite Documents + Logs).
+        Equivalent to a factory reset.
+        """
+        try:
+            # 1. Clear ChromaDB
+            await self.clear_vector_store()
+            
+            # 2. Clear SQLite
+            if not self._sqlite_connection:
+                await self.get_sqlite()
+                
+            async with self._sqlite_connection.cursor() as cursor:
+                await cursor.execute("DELETE FROM documents") # Cascade deletes doc_parents
+                await cursor.execute("DELETE FROM documents_fts")
+                await cursor.execute("DELETE FROM audit_logs") # Clean logs too
+                await cursor.execute("DELETE FROM users") # Clean users
+            
+            await self._sqlite_connection.commit()
+            
+            logger.warning("⚠️ Full System Purge executed. All databases are empty.")
+            return True
+        except Exception as e:
+            logger.error(f"Full Purge Failed: {e}")
             return False
 
     async def delete_document(self, doc_id: str) -> bool:

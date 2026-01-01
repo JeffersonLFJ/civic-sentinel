@@ -28,12 +28,28 @@ app.include_router(upload.router, prefix="/api/upload", tags=["Documents"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Management"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin Tools"])
 
-# Mount Admin Static Files
-# Ensure directory exists to avoid startup error
-admin_path = Path(__file__).resolve().parent.parent / "admin"
-admin_path.mkdir(parents=True, exist_ok=True)
-
-app.mount("/admin", StaticFiles(directory=str(admin_path), html=True), name="admin")
+# Mount Frontend - DISABLED in favor of Vite Dev Server (Port 5173)
+# To avoid confusion with old build files
+# frontend_build_path = Path(__file__).resolve().parent.parent.parent / "interfaces" / "frontend" / "dist"
+# 
+# if frontend_build_path.exists():
+#     # Mount static assets at /admin/assets (because vite base='/admin/')
+#     app.mount("/admin/assets", StaticFiles(directory=str(frontend_build_path / "assets")), name="admin_assets")
+# 
+#     # Catch-all for SPA under /admin
+#     @app.get("/admin/{full_path:path}")
+#     async def serve_admin_app(full_path: str):
+#        index_path = frontend_build_path / "index.html"
+#        from fastapi.responses import FileResponse
+#        return FileResponse(index_path)
+# 
+#     # Redirect /admin to /admin/
+#     @app.get("/admin")
+#     async def redirect_admin():
+#         from fastapi.responses import RedirectResponse
+#         return RedirectResponse(url="/admin/")
+# else:
+#     print(f"WARNING: Frontend build disabled for dev mode.")
 
 @app.on_event("startup")
 async def startup_event():

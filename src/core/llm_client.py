@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 import base64
 from src.config import settings
+from src.core.settings_manager import settings_manager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,8 +16,12 @@ class GemmaClient:
     
     def __init__(self):
         self.base_url = settings.OLLAMA_URL
-        self.model = settings.LLM_MODEL
+        # Dynamic model binding
         self.timeout = settings.LLM_TIMEOUT
+        
+    @property
+    def model(self):
+        return settings_manager.llm_model
         
 
     # generate_stream handles streaming responses
@@ -143,6 +148,10 @@ class GemmaClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
+                # Debug logging for URL and Model validation
+                logger.info(f"📤 Calling Ollama: {self.base_url}/api/chat | Model: {payload.get('model')}")
+                # logger.debug(f"Payload: {json.dumps(payload)[:200]}...") # Partial log for safety
+
                 response = await client.post(
                     f"{self.base_url}/api/chat",
                     json=payload
@@ -160,7 +169,7 @@ class GemmaClient:
                 logger.error(f"Could not connect to Ollama at {self.base_url}")
                 raise ConnectionError("Ollama service unreachable. Ensure it is running.")
             except Exception as e:
-                logger.error(f"LLM generation failed: {str(e)}")
+                logger.error(f"LLM generation failed: {repr(e)}")
                 raise
 
 llm_client = GemmaClient()

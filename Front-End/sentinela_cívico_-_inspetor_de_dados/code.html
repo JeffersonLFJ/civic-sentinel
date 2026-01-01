@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinela Cívico - Inspetor de Dados (Padronizado)</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&amp;family=Instrument+Serif:ital@0;1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#344E41", // Deep forest green
+                        "primary-light": "#588157",
+                        accent: "#A3B18A",
+                        "accent-light": "#DAD7CD",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#0f1323",
+                        "surface-light": "#F3F1E8",
+                        "surface-dark": "#2C3028",
+                        "text-primary": "#1A1C18",
+                        "text-secondary": "#4A4E45",
+                        "action": "#607AFB"
+                    },
+                    fontFamily: {
+                        display: "Public Sans",
+                        sans: ["DM Sans", "sans-serif"],
+                        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"]
+                    },
+                    borderRadius: {
+                        DEFAULT: "1rem",
+                        lg: "1.5rem",
+                        xl: "2rem",
+                        full: "9999px"
+                    },
+                    boxShadow: {
+                        soft: "0 8px 30px -4px rgba(58, 90, 64, 0.08)",
+                        "inner-soft": "inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)"
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        body {
+            font-family: "DM Sans", sans-serif;
+        }
+        h1, h2, h3, .serif-font {
+            font-family: "Instrument Serif", serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #DAD7CD; 
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #A3B18A; 
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+        }
+        .dark .glass-panel {
+            background: rgba(26, 28, 24, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .bg-dots-pattern {
+            background-image: radial-gradient(#A3B18A 1px, transparent 1px);
+            background-size: 24px 24px;
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body class="bg-[#FDFCF8] dark:bg-background-dark text-text-primary dark:text-[#E2E2E2] overflow-hidden h-screen flex flex-col transition-colors duration-300">
+<header class="flex items-center justify-between whitespace-nowrap px-8 py-5 bg-[#FDFCF8]/90 dark:bg-background-dark/90 backdrop-blur-md shrink-0 z-20 border-b border-black/5 dark:border-white/5">
+<div class="flex items-center gap-3 text-primary dark:text-[#DAD7CD]">
+<div class="size-8 text-primary-light dark:text-[#A3B18A]">
+<svg class="w-full h-full" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+<path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<h2 class="text-2xl font-normal tracking-wide text-primary dark:text-[#DAD7CD] serif-font">Sentinela Cívico</h2>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden lg:flex items-center gap-1 bg-surface-light dark:bg-surface-dark/50 px-1.5 py-1.5 rounded-full border border-black/5 dark:border-white/5">
+<a class="px-4 py-1.5 rounded-full text-text-secondary dark:text-[#A3B18A] text-sm font-medium hover:bg-white dark:hover:bg-white/5 hover:shadow-sm transition-all" href="#">Documentos</a>
+<a class="px-4 py-1.5 rounded-full text-text-secondary dark:text-[#A3B18A] text-sm font-medium hover:bg-white dark:hover:bg-white/5 hover:shadow-sm transition-all" href="#">Quarentena</a>
+<a class="px-4 py-1.5 rounded-full bg-primary text-white dark:bg-[#3A5A40] dark:text-white shadow-md text-sm font-medium transition-all" href="#">Inspetor de Dados</a>
+<a class="px-4 py-1.5 rounded-full text-text-secondary dark:text-[#A3B18A] text-sm font-medium hover:bg-white dark:hover:bg-white/5 hover:shadow-sm transition-all" href="#">Auditoria</a>
+<a class="px-4 py-1.5 rounded-full text-text-secondary dark:text-[#A3B18A] text-sm font-medium hover:bg-white dark:hover:bg-white/5 hover:shadow-sm transition-all" href="#">Cérebro</a>
+</nav>
+<div class="flex items-center gap-3 pl-2 border-l border-black/5 dark:border-white/10">
+<a class="flex items-center justify-center size-9 rounded-full bg-surface-light hover:bg-accent/20 dark:bg-surface-dark dark:hover:bg-white/10 text-text-secondary dark:text-[#A3B18A] transition-colors" href="#" title="Voltar ao Chat">
+<span class="material-symbols-outlined text-[20px]">chat_bubble</span>
+</a>
+<button class="flex items-center justify-center size-9 rounded-full bg-surface-light hover:bg-accent/20 dark:bg-surface-dark dark:hover:bg-white/10 text-text-secondary dark:text-[#A3B18A] transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-9 border-2 border-surface-light dark:border-surface-dark ring-2 ring-transparent hover:ring-accent/20 transition-all cursor-pointer" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuApK7AJ5zckomU5W5CX1eaAVCxqHS0f0lXMBBMGGSYpojkCUDuKvU3KM47zU3yQqP59qT47lJ5CRi2gtrVYVptvMGLCsD0NTj6WhIcjOj4Rxc46S9OgPqz2o5V1bGmi9xX08_3HSSIou7B7G5j5S7e4l6Zw5NvlCalhrhcYehNKOaYtuRYmlWdXPeMgsEqNo0sk91aUGutK-3xxcHHlZ-5wFoC_Wc591VSLpFHtswMERTcQ4VUZemglbVFvm2vvAaUWbppNcNARhNkP");'></div>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden px-6 pb-6 gap-6 pt-2">
+<aside class="w-full max-w-[300px] flex flex-col bg-white dark:bg-surface-dark/50 rounded-2xl shadow-soft shrink-0 border border-black/5 dark:border-white/5 overflow-hidden transition-colors duration-300">
+<div class="p-6 pb-2">
+<div class="flex items-center justify-between mb-6">
+<p class="text-xl text-primary dark:text-[#DAD7CD] serif-font">Seletor de Contexto</p>
+<div class="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full border border-emerald-100 dark:border-emerald-800">
+<span class="relative flex h-1.5 w-1.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+</span>
+<span class="text-[10px] font-bold tracking-widest text-emerald-700 dark:text-emerald-400 uppercase">Live</span>
+</div>
+</div>
+<div class="relative w-full mb-4 group">
+<div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-accent">
+<span class="material-symbols-outlined text-[18px]">search</span>
+</div>
+<input class="bg-surface-light dark:bg-black/20 border-none text-text-primary dark:text-white text-sm rounded-xl focus:ring-1 focus:ring-primary/50 block w-full pl-10 p-2.5 placeholder-text-secondary/50 transition-shadow" placeholder="Filtrar base de dados..." type="text"/>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+<div class="group flex flex-col gap-1.5 p-3.5 rounded-xl bg-surface-light dark:bg-[#3A5A40]/30 border border-accent/20 dark:border-[#3A5A40]/50 cursor-pointer relative overflow-hidden transition-all shadow-sm">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-light"></div>
+<div class="flex justify-between items-start pl-2">
+<h3 class="text-sm font-semibold text-primary dark:text-white truncate pr-2">CF - Art. 5º</h3>
+<span class="text-[10px] text-text-secondary/60">v1.2</span>
+</div>
+<div class="flex items-center gap-3 text-xs text-text-secondary dark:text-[#A3B18A] pl-2">
+<span>42 chunks</span>
+<span class="w-0.5 h-0.5 rounded-full bg-text-secondary/30"></span>
+<span>PDF</span>
+</div>
+</div>
+<div class="group flex flex-col gap-1.5 p-3.5 rounded-xl hover:bg-surface-light dark:hover:bg-white/5 border border-transparent cursor-pointer transition-all pl-5">
+<div class="flex justify-between items-start">
+<h3 class="text-sm font-medium text-text-secondary dark:text-[#DAD7CD] truncate pr-2 group-hover:text-primary dark:group-hover:text-white transition-colors">LDO 2024</h3>
+<span class="text-[10px] text-text-secondary/40">v1.0</span>
+</div>
+<div class="flex items-center gap-3 text-xs text-text-secondary/60 dark:text-[#A3B18A]/60">
+<span>156 chunks</span>
+<span class="w-0.5 h-0.5 rounded-full bg-text-secondary/30"></span>
+<span>TXT</span>
+</div>
+</div>
+<div class="group flex flex-col gap-1.5 p-3.5 rounded-xl hover:bg-surface-light dark:hover:bg-white/5 border border-transparent cursor-pointer transition-all pl-5">
+<div class="flex justify-between items-start">
+<h3 class="text-sm font-medium text-text-secondary dark:text-[#DAD7CD] truncate pr-2 group-hover:text-primary dark:group-hover:text-white transition-colors">Decreto Mun. 452/23</h3>
+<span class="text-[10px] text-text-secondary/40">v2.1</span>
+</div>
+<div class="flex items-center gap-3 text-xs text-text-secondary/60 dark:text-[#A3B18A]/60">
+<span>12 chunks</span>
+<span class="w-0.5 h-0.5 rounded-full bg-text-secondary/30"></span>
+<span>PDF</span>
+</div>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col min-w-0 bg-white/60 dark:bg-surface-dark/30 rounded-2xl shadow-soft border border-white dark:border-white/5 overflow-hidden backdrop-blur-xl">
+<div class="px-8 py-6 border-b border-black/5 dark:border-white/5 bg-white/40 dark:bg-surface-dark/40">
+<div class="flex flex-wrap gap-2 mb-3 items-center">
+<span class="text-text-secondary/40 text-xs uppercase tracking-widest font-bold">Base de Conhecimento</span>
+<span class="text-text-secondary/30 text-xs">/</span>
+<span class="text-primary dark:text-white text-xs uppercase tracking-widest font-bold">Inspeção Profunda</span>
+</div>
+<div class="flex flex-wrap justify-between items-end gap-6">
+<div>
+<h1 class="text-3xl md:text-4xl text-primary dark:text-[#F3F1E8] tracking-tight leading-none serif-font">Constituição Federal - Artigo 5º</h1>
+<p class="text-text-secondary dark:text-[#A3B18A] text-sm mt-2 font-light max-w-2xl leading-relaxed">
+                            Visualização detalhada da ingestão de dados e análise vetorial.
+                        </p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl border border-black/5 dark:border-white/10 hover:bg-surface-light dark:hover:bg-white/5 text-text-secondary dark:text-[#DAD7CD] text-sm font-medium transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete_outline</span>
+<span class="hidden sm:inline">Limpar</span>
+</button>
+<button class="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary hover:bg-primary-light text-white text-sm font-medium shadow-lg shadow-primary/10 transition-all hover:-translate-y-0.5">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+<span>Reindexar</span>
+</button>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-dots-pattern">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="glass-panel p-5 rounded-xl flex flex-col justify-between group hover:border-accent/40 transition-colors">
+<div class="flex items-center justify-between mb-3">
+<p class="text-[11px] font-bold text-text-secondary/60 dark:text-[#A3B18A] uppercase tracking-wider">ID Único</p>
+<span class="material-symbols-outlined text-text-secondary/30 text-sm">fingerprint</span>
+</div>
+<p class="text-sm font-mono text-primary dark:text-white truncate bg-surface-light/50 dark:bg-white/5 p-1.5 rounded-lg select-all cursor-text">doc_998a7s6...</p>
+</div>
+<div class="glass-panel p-5 rounded-xl flex flex-col justify-between group hover:border-accent/40 transition-colors">
+<div class="flex items-center justify-between mb-3">
+<p class="text-[11px] font-bold text-text-secondary/60 dark:text-[#A3B18A] uppercase tracking-wider">Volume</p>
+<span class="material-symbols-outlined text-text-secondary/30 text-sm">data_usage</span>
+</div>
+<div class="flex items-baseline gap-1">
+<p class="text-2xl font-normal text-primary dark:text-white serif-font">8,421</p>
+<span class="text-xs text-text-secondary/50">tokens</span>
+</div>
+</div>
+<div class="glass-panel p-5 rounded-xl flex flex-col justify-between group hover:border-accent/40 transition-colors">
+<div class="flex items-center justify-between mb-3">
+<p class="text-[11px] font-bold text-text-secondary/60 dark:text-[#A3B18A] uppercase tracking-wider">Modelo</p>
+<span class="material-symbols-outlined text-text-secondary/30 text-sm">model_training</span>
+</div>
+<p class="text-sm font-medium text-text-primary dark:text-white flex items-center gap-2">
+<span class="size-2 rounded-full bg-blue-400"></span>
+                            text-embedding-3
+                        </p>
+</div>
+<div class="glass-panel p-5 rounded-xl flex flex-col justify-between group hover:border-accent/40 transition-colors">
+<div class="flex items-center justify-between mb-3">
+<p class="text-[11px] font-bold text-text-secondary/60 dark:text-[#A3B18A] uppercase tracking-wider">Integridade</p>
+<span class="material-symbols-outlined text-emerald-500 text-sm">check_circle</span>
+</div>
+<p class="text-sm font-mono text-text-secondary dark:text-white truncate opacity-70">MD5: a1b2c3...</p>
+</div>
+</div>
+<div class="flex flex-col lg:flex-row gap-8 h-full min-h-[500px]">
+<div class="flex-1 flex flex-col bg-white dark:bg-surface-dark/40 rounded-2xl shadow-soft border border-black/5 dark:border-white/5 overflow-hidden">
+<div class="flex items-center p-2 border-b border-black/5 dark:border-white/5 bg-surface-light/30 dark:bg-black/20">
+<div class="flex p-1 bg-surface-light dark:bg-surface-dark rounded-xl">
+<button class="px-5 py-2 rounded-lg bg-white dark:bg-[#3A5A40] text-primary dark:text-white shadow-sm text-sm font-medium transition-all">Chunks</button>
+<button class="px-5 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-text-secondary dark:text-[#A3B18A] text-sm font-medium transition-all">JSON</button>
+<button class="px-5 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-text-secondary dark:text-[#A3B18A] text-sm font-medium transition-all">Metadados</button>
+</div>
+</div>
+<div class="p-5 border-b border-black/5 dark:border-white/5 bg-gradient-to-b from-white to-surface-light/30 dark:from-surface-dark/10 dark:to-transparent">
+<label class="block text-xs font-bold text-text-secondary dark:text-[#A3B18A] mb-3 flex items-center gap-2 uppercase tracking-wide">
+<span class="material-symbols-outlined text-sm">psychology</span>
+                                Simular Busca Semântica
+                            </label>
+<div class="flex gap-3">
+<div class="relative flex-1 group">
+<input class="w-full bg-white dark:bg-black/20 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-text-primary dark:text-white focus:ring-1 focus:ring-primary focus:border-primary placeholder-text-secondary/40 transition-shadow shadow-sm group-hover:shadow-md" placeholder="Digite uma pergunta para testar a similaridade dos chunks..." type="text"/>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+<span class="material-symbols-outlined text-text-secondary/30 text-lg">search</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex-1 p-6 overflow-y-auto max-h-[600px] space-y-6">
+<div class="group relative rounded-2xl bg-white dark:bg-surface-dark border border-emerald-100 dark:border-emerald-900/30 p-6 shadow-sm hover:shadow-md transition-all ring-1 ring-emerald-50 dark:ring-transparent">
+<div class="absolute -left-[1px] top-6 bottom-6 w-1 bg-primary-light rounded-r-full"></div>
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono font-bold text-primary-light dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full border border-emerald-100 dark:border-emerald-800">CHUNK #001</span>
+<div class="flex items-center gap-1 text-xs text-primary dark:text-emerald-500 font-medium bg-surface-light dark:bg-white/5 px-2 py-1 rounded-lg">
+<span class="material-symbols-outlined text-[14px] text-accent">star</span>
+<span>Score: 0.89</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-xs text-text-secondary/50 font-mono">245 tokens</span>
+<button class="text-text-secondary/40 hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">content_copy</span></button>
+</div>
+</div>
+<p class="text-[15px] leading-relaxed text-text-primary dark:text-[#E2E2E2] font-normal font-sans pl-2 border-l-2 border-surface-light dark:border-white/5">
+                                    Todos são iguais perante a lei, sem distinção de qualquer natureza, garantindo-se aos brasileiros e aos estrangeiros residentes no País a inviolabilidade do direito à vida, à liberdade, à igualdade, à segurança e à propriedade...
+                                </p>
+<div class="mt-5 pt-4 border-t border-dashed border-black/5 dark:border-white/10">
+<div class="flex justify-between items-end mb-2">
+<p class="text-[10px] uppercase tracking-wider text-text-secondary/50 font-semibold">Embedding Vector</p>
+<div class="text-[10px] font-mono text-text-secondary/50">[-0.0123, 0.4521, ...]</div>
+</div>
+<div class="flex gap-[2px] h-2 w-full rounded-md overflow-hidden opacity-80">
+<div class="flex-1 bg-primary/80"></div>
+<div class="flex-1 bg-primary/40"></div>
+<div class="flex-1 bg-primary/90"></div>
+<div class="flex-1 bg-primary/50"></div>
+<div class="flex-1 bg-accent/60"></div>
+<div class="flex-1 bg-primary/70"></div>
+<div class="flex-1 bg-primary/30"></div>
+<div class="flex-1 bg-primary/60"></div>
+<div class="flex-1 bg-primary-light"></div>
+<div class="w-12 bg-surface-light dark:bg-white/5"></div>
+</div>
+</div>
+</div>
+<div class="group relative rounded-2xl bg-white/50 dark:bg-surface-dark/50 border border-transparent hover:border-black/5 dark:hover:border-white/10 p-6 transition-all hover:bg-white dark:hover:bg-surface-dark hover:shadow-sm">
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono font-bold text-text-secondary dark:text-[#A3B18A] bg-surface-light dark:bg-white/5 px-3 py-1 rounded-full">CHUNK #002</span>
+</div>
+<span class="text-xs text-text-secondary/50 font-mono">198 tokens</span>
+</div>
+<p class="text-[15px] leading-relaxed text-text-secondary dark:text-[#DAD7CD] font-normal font-sans opacity-80">
+                                    I - homens e mulheres são iguais em direitos e obrigações, nos termos desta Constituição;<br/>
+                                    II - ninguém será obrigado a fazer ou deixar de fazer alguma coisa senão em virtude de lei...
+                                </p>
+</div>
+<div class="group relative rounded-2xl bg-white/50 dark:bg-surface-dark/50 border border-transparent hover:border-black/5 dark:hover:border-white/10 p-6 transition-all hover:bg-white dark:hover:bg-surface-dark hover:shadow-sm">
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono font-bold text-text-secondary dark:text-[#A3B18A] bg-surface-light dark:bg-white/5 px-3 py-1 rounded-full">CHUNK #003</span>
+</div>
+<span class="text-xs text-text-secondary/50 font-mono">312 tokens</span>
+</div>
+<p class="text-[15px] leading-relaxed text-text-secondary dark:text-[#DAD7CD] font-normal font-sans opacity-80">
+                                    IV - é livre a manifestação do pensamento, sendo vedado o anonimato;<br/>
+                                    V - é assegurado o direito de resposta, proporcional ao agravo...
+                                </p>
+</div>
+</div>
+</div>
+<div class="w-full lg:w-80 flex flex-col gap-6 shrink-0">
+<div class="bg-white dark:bg-surface-dark rounded-2xl shadow-soft p-6 border border-black/5 dark:border-white/5">
+<h3 class="text-lg text-primary dark:text-[#DAD7CD] mb-6 flex items-center gap-2 serif-font">
+<span class="material-symbols-outlined text-accent">tune</span>
+                                Parâmetros
+                            </h3>
+<div class="space-y-6">
+<div>
+<label class="text-[10px] font-bold text-text-secondary/70 dark:text-[#A3B18A] block mb-2 uppercase tracking-wide">Coleção Alvo</label>
+<div class="flex items-center justify-between bg-surface-light dark:bg-black/20 rounded-xl px-4 py-3 border border-transparent hover:border-accent/30 transition-colors">
+<span class="text-sm text-text-primary dark:text-white font-mono">laws_br_v2</span>
+<span class="material-symbols-outlined text-xs text-accent">database</span>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold text-text-secondary/70 dark:text-[#A3B18A] block mb-2 uppercase tracking-wide">Métricas do Índice</label>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface-light dark:bg-black/20 p-3 rounded-xl text-center border border-transparent hover:border-accent/20 transition-colors">
+<span class="block text-[10px] text-text-secondary/60 dark:text-[#A3B18A] uppercase mb-1">Dimensões</span>
+<span class="block text-lg font-bold text-primary dark:text-white leading-none">1536</span>
+</div>
+<div class="bg-surface-light dark:bg-black/20 p-3 rounded-xl text-center border border-transparent hover:border-accent/20 transition-colors">
+<span class="block text-[10px] text-text-secondary/60 dark:text-[#A3B18A] uppercase mb-1">Distância</span>
+<span class="block text-lg font-bold text-primary dark:text-white leading-none">Cosine</span>
+</div>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold text-text-secondary/70 dark:text-[#A3B18A] block mb-2 uppercase tracking-wide">Parser Config</label>
+<div class="bg-surface-light dark:bg-black/20 p-4 rounded-xl text-xs font-mono text-text-secondary dark:text-[#DAD7CD] leading-loose relative overflow-hidden">
+<div class="absolute top-2 right-2 p-1 opacity-20">
+<span class="material-symbols-outlined text-lg">code</span>
+</div>
+<span class="text-accent">{</span><br/>
+                                          "chunk_size": <span class="text-primary-light dark:text-emerald-400 font-bold">1000</span>,<br/>
+                                          "overlap": <span class="text-primary-light dark:text-emerald-400 font-bold">200</span>,<br/>
+                                          "separators": ["\n\n"]<br/>
+<span class="text-accent">}</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-primary dark:bg-surface-dark rounded-2xl p-6 shadow-lg text-white relative overflow-hidden group">
+<div class="absolute -right-6 -top-6 w-40 h-40 bg-[#588157] rounded-full blur-3xl group-hover:bg-[#A3B18A] transition-all duration-1000 opacity-60"></div>
+<div class="absolute -left-6 -bottom-6 w-32 h-32 bg-black/20 rounded-full blur-2xl"></div>
+<div class="relative z-10">
+<h3 class="text-lg font-normal text-white/90 mb-4 serif-font">Status do Cluster</h3>
+<div class="flex items-center gap-3 mb-2">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
+</span>
+<span class="text-sm font-medium text-white tracking-wide">Operacional</span>
+</div>
+<div class="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-4">
+<div>
+<p class="text-[10px] text-white/60 uppercase">Latência</p>
+<p class="text-sm font-mono text-white">24ms</p>
+</div>
+<div>
+<p class="text-[10px] text-white/60 uppercase">Uptime</p>
+<p class="text-sm font-mono text-white">99.9%</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
