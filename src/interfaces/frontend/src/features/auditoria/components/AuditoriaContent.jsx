@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 import { ChatMessage } from '../../../components/ui/ChatMessage';
+import { adminFetch } from '../../../utils/adminFetch';
 
 const StatCard = ({ icon, label, value, colorClass }) => (
     <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/80 border border-border/60 shadow-sm backdrop-blur-sm">
@@ -22,7 +23,7 @@ export const AuditoriaContent = ({ selectedId }) => {
         if (!selectedId) return;
 
         setLoading(true);
-        fetch(`/api/admin/audit/${selectedId}`)
+        adminFetch(`/api/admin/audit/${selectedId}`)
             .then(res => res.json())
             .then(data => {
                 setDetail(data);
@@ -145,18 +146,71 @@ export const AuditoriaContent = ({ selectedId }) => {
                                 <div className="p-6 relative">
                                     <div className="absolute left-[41px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-primary/30 to-purple-200"></div>
 
-                                    {/* Simple View of gathered details */}
-                                    {reasoning.step_1_intent && (
-                                        <div className="relative flex gap-5 mb-8 group">
-                                            <div className="size-9 rounded-full bg-white border-2 border-primary/20 shadow-sm flex items-center justify-center z-10 text-primary shrink-0 transition-all">
-                                                <span className="material-symbols-outlined text-[18px]">travel_explore</span>
-                                            </div>
-                                            <div className="flex-1 pt-0.5">
-                                                <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Intenção Identificada</h4>
-                                                <p className="text-sm text-text-main leading-relaxed bg-background/50 p-3 rounded-lg border border-border/50">{reasoning.step_1_intent}</p>
+                                    {/* Step 1: Intent */}
+                                    <div className="relative flex gap-5 mb-8 group">
+                                        <div className="size-9 rounded-full bg-white border-2 border-primary/20 shadow-sm flex items-center justify-center z-10 text-primary shrink-0 transition-all">
+                                            <span className="material-symbols-outlined text-[18px]">travel_explore</span>
+                                        </div>
+                                        <div className="flex-1 pt-0.5">
+                                            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">1. Intenção Identificada</h4>
+                                            <p className="text-sm text-text-main leading-relaxed bg-background/50 p-3 rounded-lg border border-border/50">{reasoning.step_1_intent || "Não identificada"}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Step 2: Sphere */}
+                                    <div className="relative flex gap-5 mb-8 group">
+                                        <div className="size-9 rounded-full bg-white border-2 border-emerald-500/20 shadow-sm flex items-center justify-center z-10 text-emerald-600 shrink-0 transition-all">
+                                            <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                                        </div>
+                                        <div className="flex-1 pt-0.5">
+                                            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">2. Filtro de Esfera</h4>
+                                            <p className="text-sm text-text-main leading-relaxed bg-background/50 p-3 rounded-lg border border-border/50 uppercase font-mono">{reasoning.step_2_sphere || "GERAL"}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Step 3: Ambiguity */}
+                                    <div className="relative flex gap-5 mb-8 group">
+                                        <div className="size-9 rounded-full bg-white border-2 border-amber-500/20 shadow-sm flex items-center justify-center z-10 text-amber-500 shrink-0 transition-all">
+                                            <span className="material-symbols-outlined text-[18px]">rule</span>
+                                        </div>
+                                        <div className="flex-1 pt-0.5">
+                                            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">3. Análise de Ambiguidade</h4>
+                                            <div className="flex items-center gap-3 bg-background/50 p-3 rounded-lg border border-border/50 max-w-sm">
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                                    <div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${(reasoning.step_3_ambiguity || 0) * 100}%` }}></div>
+                                                </div>
+                                                <span className="text-sm font-bold text-text-main font-mono">{(reasoning.step_3_ambiguity || 0).toFixed(2)}</span>
+                                                {(reasoning.step_3_ambiguity || 0) > 0.7 && <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-sm">Alta</span>}
                                             </div>
                                         </div>
-                                    )}
+                                    </div>
+
+                                    {/* Step 4: Retrieval */}
+                                    <div className="relative flex gap-5 mb-8 group">
+                                        <div className="size-9 rounded-full bg-white border-2 border-blue-500/20 shadow-sm flex items-center justify-center z-10 text-blue-500 shrink-0 transition-all">
+                                            <span className="material-symbols-outlined text-[18px]">library_books</span>
+                                        </div>
+                                        <div className="flex-1 pt-0.5">
+                                            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">4. Busca de Documentos (RAG)</h4>
+                                            <p className="text-sm text-text-main leading-relaxed bg-background/50 p-3 rounded-lg border border-border/50 font-mono">{reasoning.step_4_retrieval || "0 sources"}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Step 5: Confidence */}
+                                    <div className="relative flex gap-5 group">
+                                        <div className="size-9 rounded-full bg-white border-2 border-purple-500/20 shadow-sm flex items-center justify-center z-10 text-purple-600 shrink-0 transition-all">
+                                            <span className="material-symbols-outlined text-[18px]">verified</span>
+                                        </div>
+                                        <div className="flex-1 pt-0.5">
+                                            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">5. Confiança Final (Reranker)</h4>
+                                            <div className="flex items-center gap-3 bg-background/50 p-3 rounded-lg border border-border/50 max-w-sm">
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                                    <div className="bg-gradient-to-r from-purple-400 to-primary h-2.5 rounded-full" style={{ width: `${(reasoning.step_5_confidence || 0) * 100}%` }}></div>
+                                                </div>
+                                                <span className="text-sm font-bold text-text-main font-mono">{((reasoning.step_5_confidence || 0) * 100).toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                 </div>
                             </div>

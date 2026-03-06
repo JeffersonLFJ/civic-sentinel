@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import asyncio
 from pathlib import Path
 from src.config import settings
 
@@ -34,3 +35,14 @@ async def cleanup_stale_uploads(max_age_seconds: int = 86400):
         logger.info(f"✅ Limpeza concluída: {count} arquivos expirados removidos.")
     else:
         logger.info("✅ Limpeza concluída: Nenhum arquivo expirado encontrado.")
+
+async def cleanup_stale_uploads_periodically(interval_seconds: int = 3600, max_age_seconds: int = 86400):
+    """
+    Periodically cleans stale uploads to avoid storage bloat.
+    """
+    while True:
+        try:
+            await cleanup_stale_uploads(max_age_seconds=max_age_seconds)
+        except Exception as e:
+            logger.warning(f"Erro na limpeza periódica de uploads: {e}")
+        await asyncio.sleep(interval_seconds)

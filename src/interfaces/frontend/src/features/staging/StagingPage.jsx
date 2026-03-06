@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ReviewModal } from './components/ReviewModal';
+import { adminFetch } from '../../utils/adminFetch';
 
 export const StagingPage = () => {
     const [pendingDocs, setPendingDocs] = useState([]);
@@ -14,12 +15,12 @@ export const StagingPage = () => {
         setLoading(true);
         try {
             // Fetch Pending
-            const resPending = await fetch('/api/admin/staging');
+            const resPending = await adminFetch('/api/admin/staging');
             const dataPending = await resPending.json();
             setPendingDocs(dataPending.documents || []);
 
             // Fetch Queued
-            const resQueued = await fetch('/api/admin/staging/queued');
+            const resQueued = await adminFetch('/api/admin/staging/queued');
             const dataQueued = await resQueued.json();
             setQueuedDocs(dataQueued.documents || []);
         } catch (error) {
@@ -51,7 +52,7 @@ export const StagingPage = () => {
                 setProgress(prev => ({ ...prev, current: `Indexando ${doc.filename}...` }));
 
                 try {
-                    const res = await fetch(`/api/admin/staging/${doc.id}/activate`, { method: 'POST' });
+                    const res = await adminFetch(`/api/admin/staging/${doc.id}/activate`, { method: 'POST' });
                     if (!res.ok) {
                         const data = await res.json();
                         throw new Error(data.detail || 'Failed');

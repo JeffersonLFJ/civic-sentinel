@@ -23,6 +23,18 @@ export const ChatPage = () => {
         setInput('');
         setLoading(true);
 
+        // Prepare the initial AI message placeholder
+        const aiMsgId = Date.now() + 1;
+        const initialAiMsg = {
+            id: aiMsgId,
+            sender: "Sentinela IA",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            text: "",
+            isAi: true,
+            citations: []
+        };
+        setMessages(prev => [...prev, initialAiMsg]);
+
         try {
             const response = await fetch('/api/chat/', {
                 method: 'POST',
@@ -30,29 +42,87 @@ export const ChatPage = () => {
                 body: JSON.stringify({
                     message: userMsg.text,
                     user_id: userId,
-                    stream: false // For prototype simplicity, start with non-streaming to guarantee stability first
+                    stream: true // Enabled SSE Streaming
                 })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
 
-            const aiMsg = {
-                id: Date.now() + 1,
-                sender: "Sentinela IA",
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                text: data.response || "Sem resposta do servidor.",
-                isAi: true
-            };
-            setMessages(prev => [...prev, aiMsg]);
+            // Remove main loading spinner as we're starting to receive data
+            setLoading(false);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+
+                    try {
+                        let data;
+                        if (line.startsWith('data: ')) {
+                            data = JSON.parse(line.substring(6));
+                        } else {
+                            data = JSON.parse(line);
+                        }
+
+                        if (data.type === 'citations' && data.data) {
+                            // First frame usually has metadata
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMsgId ? { ...msg, citations: data.data } : msg
+                            ));
+                        }
+
+                        if (data.type === 'token' && data.content) {
+                            // Accumulate tokens
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMsgId ? { ...msg, text: msg.text + data.content } : msg
+                            ));
+                        }
+
+                        if (data.type === 'done') {
+                            // Stream complete
+                            break;
+                        }
+
+                        // Also handle active listening responses (which come as standard JSON, not stream)
+                        if (data.status === 'ambiguity_detected') {
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMsgId ? { ...msg, text: data.response, isAmbiguous: true } : msg
+                            ));
+                        } else if (data.response && !data.type) {
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMsgId ? { ...msg, text: data.response } : msg
+                            ));
+                        }
+                    } catch (e) {
+                        // Some lines might not be valid JSON if chunked mid-word, though rare with lines
+                        console.warn("Error parsing chunk", line, e);
+                    }
+                }
+            }
+
         } catch (error) {
             console.error("Chat Error:", error);
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                sender: "Sistema",
-                time: "",
-                text: "Erro ao comunicar com o servidor.",
-                isAi: true
-            }]);
+            setMessages(prev => {
+                // Remove the empty placeholder if it failed completely
+                const filtered = prev.filter(m => m.id !== aiMsgId || m.text !== "");
+                return [...filtered, {
+                    id: Date.now() + 2,
+                    sender: "Sistema",
+                    time: "",
+                    text: "Erro ao comunicar com o servidor. Tente novamente.",
+                    isAi: true
+                }];
+            });
         } finally {
             setLoading(false);
         }
@@ -76,7 +146,34 @@ export const ChatPage = () => {
 
                 {messages.map(msg => (
                     <div key={msg.id} className={!msg.isAi ? "flex justify-end" : ""}>
-                        <ChatMessage {...msg} />
+                        <div className="flex flex-col gap-2 relative w-full">
+                            <ChatMessage {...msg} />
+
+                            {/* Active Listening Triggers */}
+                            {msg.isAmbiguous && (
+                                <div className="ml-14 max-w-xl mx-auto w-full flex flex-wrap gap-2 animate-fade-in mt-1">
+                                    <button
+                                        onClick={() => {
+                                            setInput(msg.text.includes('refere a') ? msg.text.split('refere a ')[1].split(' ou')[0] : 'Sim');
+                                            // Ideally this would trigger standard send, but simply setting input helps user
+                                        }}
+                                        className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-full font-bold transition-colors border border-amber-200 flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">check</span>
+                                        Confirmar Intenção
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setInput("Na verdade me referia a: ");
+                                        }}
+                                        className="text-xs bg-white hover:bg-background-light px-3 py-1.5 rounded-full font-bold transition-colors border border-border/80 text-text-secondary flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">edit</span>
+                                        Reformular
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ))}
 

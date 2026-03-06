@@ -3,6 +3,7 @@ import { StatCard } from '../../components/ui/StatCard';
 import { UploadModal } from './components/UploadModal';
 import { ScanModal } from './components/ScanModal';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { adminFetch } from '../../utils/adminFetch';
 
 export const DocumentosPage = () => {
     const [docs, setDocs] = useState([]);
@@ -21,8 +22,8 @@ export const DocumentosPage = () => {
         try {
             // Parallel Fetch
             const [docsRes, statsRes] = await Promise.all([
-                fetch('/api/documents/?limit=100').then(r => r.json()),
-                fetch('/api/admin/stats').then(r => r.json())
+                adminFetch('/api/documents/?limit=100').then(r => r.json()),
+                adminFetch('/api/admin/stats').then(r => r.json())
             ]);
 
             // Handle Docs Response structure (can be array or {data: []})
@@ -66,7 +67,7 @@ export const DocumentosPage = () => {
             // Since we don't have a batch delete endpoint yet, we just loop delete calls
             // Ideally we should add DELETE /api/documents/batch but this is fine for < 50 docs
             await Promise.all(deleteTarget.map(id =>
-                fetch(`/api/documents/${id}`, { method: 'DELETE' })
+                adminFetch(`/api/documents/${id}`, { method: 'DELETE' })
             ));
 
             fetchData(); // Refresh

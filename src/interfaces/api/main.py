@@ -15,7 +15,7 @@ app = FastAPI(
 # CORS (Configured for local dev)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,6 +56,13 @@ async def startup_event():
     # Setup Logging
     from src.utils.logger import setup_logging
     setup_logging()
+
+    # Security checks for production
+    if settings.ENV.lower() in {"prod", "production"}:
+        if not settings.ANONYMIZATION_SALT or settings.ANONYMIZATION_SALT == "dev_secret_salt_CHANGE_IN_PROD":
+            raise RuntimeError("ANONYMIZATION_SALT not configured for production.")
+        if not settings.ADMIN_API_KEY or settings.ADMIN_API_KEY == "dev_admin_key_CHANGE_IN_PROD":
+            raise RuntimeError("ADMIN_API_KEY not configured for production.")
     
     # Check DB
     _ = db_manager.chroma_client
@@ -63,8 +70,12 @@ async def startup_event():
     
     # Background Maintenance
     import asyncio
-    from src.utils.maintenance import cleanup_stale_uploads
-    asyncio.create_task(cleanup_stale_uploads())
+    from src.utils.maintenance import cleanup_stale_uploads_periodically
+    asyncio.create_task(cleanup_stale_uploads_periodically())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await db_manager.close()
 
 @app.get("/", include_in_schema=False)
 async def root():

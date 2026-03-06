@@ -56,49 +56,6 @@ class DatabaseManager:
 
     # ... (skipping unchanged _init_sqlite_schema codes) ...
 
-    async def delete_document(self, doc_id: str) -> bool:
-        """
-        Deletes document from SQLite and VectorDB atomically.
-        """
-        if not self._sqlite_connection:
-            await self.get_sqlite()
-            
-        try:
-            # 1. Delete from SQLite (Transactions)
-            async with self._sqlite_connection.cursor() as cursor:
-                # Delete from FTS first (Virtual table)
-                await cursor.execute("DELETE FROM documents_fts WHERE id = ?", (doc_id,))
-                
-                # Delete from Main Table
-                # With PRAGMA foreign_keys = ON, this SHOULD cascade to doc_parents.
-                # But let's be paranoid and explicit for robustness.
-                await cursor.execute("DELETE FROM doc_parents WHERE doc_id = ?", (doc_id,))
-                await cursor.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
-                
-                deleted_count = cursor.rowcount
-            
-            await self._sqlite_connection.commit()
-            
-            if deleted_count == 0:
-                logger.warning(f"Document {doc_id} not found in SQLite to delete.")
-            
-            # 2. Delete from ChromaDB
-            collection = self.chroma_client.get_or_create_collection("sentinela_documents")
-            try:
-                collection.delete(where={"original_doc_id": doc_id})
-                logger.info(f"Vectors for {doc_id} deleted from ChromaDB.")
-            except Exception as e:
-                logger.error(f"Chroma metadata delete failed: {e}. Trying ID fallback.")
-                # Fallback range delete
-                potential_ids = [f"{doc_id}_micro_{i}" for i in range(2000)]
-                collection.delete(ids=potential_ids)
-                
-            return True
-            
-        except Exception as e:
-            logger.error(f"Atomic Delete failed for {doc_id}: {e}")
-            return False
-
     async def close(self):
         """
         Closes connections.
@@ -254,6 +211,20 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"❌ Database Log Failure: {e}")
             # Do not raise to prevent breaking the flow
+
+    async def clear_audit_logs(self) -> int:
+        """
+        Clears all audit logs and returns the number of removed rows.
+        """
+        if not self._sqlite_connection:
+            await self.get_sqlite()
+
+        async with self._sqlite_connection.cursor() as cursor:
+            await cursor.execute("SELECT COUNT(*) FROM audit_logs")
+            count = (await cursor.fetchone())[0]
+            await cursor.execute("DELETE FROM audit_logs")
+        await self._sqlite_connection.commit()
+        return count
 
 
     async def save_document_record(self, doc_data: Dict[str, Any]):

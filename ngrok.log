@@ -1,0 +1,48 @@
+t=2026-03-06T01:56:41-0300 lvl=info msg="no configuration paths supplied"
+t=2026-03-06T01:56:41-0300 lvl=info msg="using configuration at default config path" path="/Users/jeffersonlopes/Library/Application Support/ngrok/ngrok.yml"
+t=2026-03-06T01:56:41-0300 lvl=info msg="open config file" path="/Users/jeffersonlopes/Library/Application Support/ngrok/ngrok.yml" err=nil
+t=2026-03-06T01:56:41-0300 lvl=info msg="FIPS 140 mode" enabled=false
+t=2026-03-06T01:56:41-0300 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
+t=2026-03-06T01:56:41-0300 lvl=info msg="client session established" obj=tunnels.session
+t=2026-03-06T01:56:41-0300 lvl=info msg="tunnel session started" obj=tunnels.session
+t=2026-03-06T01:56:42-0300 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:5173 url=https://indivisible-nonfelicitously-lana.ngrok-free.dev
+t=2026-03-06T01:56:42-0300 lvl=info msg="update available" obj=updater
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=a5b49d352099 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=64a4f796049c l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=b134ba9fb99d l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=f511b3c4eb4a l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=0f5b469587a0 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=755dd7369561 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=5e4d027ca3d1 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=d46039200a7e l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=b1ad1aa44a8c l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=0d0e22dc690e l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=46372c0d2ac2 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=dbcaa015c047 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=885aee73764f l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=af2e4b7ebc5b l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481
+t=2026-03-06T01:56:43-0300 lvl=info msg="join connections" obj=join id=22e62b7983dd l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64484
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=852f0e1adef5 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55089
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=7356dd70a9d5 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=c22dd1620f21 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=7ba238e6add4 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=847c03c22665 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=98f541f63ee1 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=9c1ed79019b1 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=f4dd02fb5b06 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=cf41068d0bb6 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=35460ac81aa0 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=f39e2bd1fdee l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=394cf0cc05af l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=ed2fb269287c l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=44a32eeb18e8 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=ea8e690168c1 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=75c6a421481c l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=62e0d8d6694a l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:45-0300 lvl=info msg="join connections" obj=join id=4876193461f1 l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55091
+t=2026-03-06T01:56:46-0300 lvl=info msg=start pg=/api/tunnels id=b2adeb225f206f44
+t=2026-03-06T01:56:46-0300 lvl=info msg=end pg=/api/tunnels id=b2adeb225f206f44 status=200 dur=328.125µs
+t=2026-03-06T01:56:50-0300 lvl=info msg="join connections" obj=join id=c68dddde2efd l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:55110
+t=2026-03-06T01:56:51-0300 lvl=info msg=start pg=/api/tunnels id=18c72d97a2b58284
+t=2026-03-06T01:56:51-0300 lvl=info msg=end pg=/api/tunnels id=18c72d97a2b58284 status=200 dur=131.541µs
+t=2026-03-06T01:56:52-0300 lvl=info msg="join connections" obj=join id=392bb3c97f9d l=[::1]:5173 r=[2804:3bf0:dd58:ad00:d475:2ff3:dccb:e256]:64481

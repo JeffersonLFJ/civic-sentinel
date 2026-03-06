@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import logging
 from typing import Dict, Any, List, Optional
+from src.utils.security import sanitize_filename
 
 logger = logging.getLogger("src.interfaces.api.routes.upload")
 router = APIRouter()
@@ -80,14 +81,35 @@ async def upload_document(
 ):
     temp_dir = settings.DATA_DIR / "uploads_temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    file_location = temp_dir / file.filename
+    safe_upload_name = sanitize_filename(file.filename or "")
+    if not safe_upload_name:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    file_location = temp_dir / safe_upload_name
     
     try:
+        # Validate MIME type
+        allowed_mime = settings.allowed_upload_mime()
+        allowed_exts = {".pdf", ".txt", ".html"}
+        file_ext = Path(safe_upload_name).suffix.lower()
+        if file.content_type not in allowed_mime and file_ext not in allowed_exts:
+            raise HTTPException(status_code=415, detail="Unsupported file type.")
+
+        # Validate size
+        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+        file.file.seek(0, os.SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0)
+        if size > max_bytes:
+            raise HTTPException(status_code=413, detail="File too large.")
+
         logger.info(f"💾 Upload recebido: {file.filename} ({doc_type})")
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        final_name = custom_filename if custom_filename and custom_filename.strip() else file.filename
+        raw_final_name = custom_filename if custom_filename and custom_filename.strip() else file.filename
+        final_name = sanitize_filename(raw_final_name or "")
+        if not final_name:
+            raise HTTPException(status_code=400, detail="Invalid final filename.")
         
         doc_id = await process_document_task(
             str(file_location), 

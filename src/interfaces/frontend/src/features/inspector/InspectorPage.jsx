@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { adminFetch } from '../../utils/adminFetch';
 
 export const InspectorPage = () => {
     const [docs, setDocs] = useState([]);
@@ -23,7 +24,7 @@ export const InspectorPage = () => {
     const fetchDocs = async () => {
         setLoadingDocs(true);
         try {
-            const res = await fetch('/api/documents/?limit=100');
+            const res = await adminFetch('/api/documents/?limit=100');
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
             setDocs(list);
@@ -37,7 +38,7 @@ export const InspectorPage = () => {
     const fetchChunks = async (id) => {
         setLoadingChunks(true);
         try {
-            const res = await fetch(`/api/admin/inspect/${id}`);
+            const res = await adminFetch(`/api/admin/inspect/${id}`);
             const data = await res.json();
             setChunks(data.chunks || []);
         } catch (error) {

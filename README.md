@@ -40,6 +40,10 @@
     ```
     API available at: `http://localhost:8000/docs`
 
+    **Admin Routes Security**
+    Admin endpoints under `/api/admin/*` and destructive document actions require an admin key.
+    Set `ADMIN_API_KEY` in `.env` and pass it via `X-Admin-Key` (or `Authorization: Bearer <key>`).
+
 2.  **Start Frontend**
     ```bash
     cd src/interfaces/frontend
@@ -64,6 +68,22 @@ The backend is configured to serve the frontend static files automatically.
     python3 -m uvicorn src.interfaces.api.main:app --host 0.0.0.0 --port 8000
     ```
     Access the full app at: `http://localhost:8000/admin/`
+
+### 🌍 Running Online (Ngrok)
+
+To make the application interactive and accessible remotely (without deploying to a server), use the provided helper script:
+
+```bash
+# Ensure ngrok is installed: brew install ngrok/tap/ngrok
+./scripts/start_ngrok_mode.sh
+```
+
+This will:
+1.  Start the Backend (Port 8000)
+2.  Start the Frontend (Port 5173)
+3.  Open an Ngrok tunnel to the Frontend
+4.  Display the public URL to access the app
+
 
 ## 📁 Project Structure
 

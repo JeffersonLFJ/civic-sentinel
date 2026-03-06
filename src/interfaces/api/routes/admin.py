@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from pathlib import Path
@@ -6,13 +6,14 @@ from src.core.database import db_manager
 from src.config import settings
 from src.ingestors.diario_oficial import diario_ingestor
 from datetime import date, timedelta
+from src.utils.auth import require_permission
 
 router = APIRouter()
 import logging
 logger = logging.getLogger(__name__)
 
 # --- Stats ---
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_permission("view_analytics"))])
 async def get_system_stats():
     """
     Returns dashboard statistics.
@@ -49,7 +50,7 @@ async def get_system_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/audit/{log_id}")
+@router.get("/audit/{log_id}", dependencies=[Depends(require_permission("view_analytics"))])
 async def get_audit_detail(log_id: str):
     """
     Returns full detail of an interaction for the Raio-X view (Reasoning Map).
@@ -95,7 +96,7 @@ async def get_audit_detail(log_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/audit")
+@router.delete("/audit", dependencies=[Depends(require_permission("manage_users"))])
 async def clear_audit_logs():
     """
     Clears all audit logs.
@@ -112,14 +113,14 @@ PROMPT_FILE = settings.BASE_DIR / "sentinela_prompt_v2.md"
 class PromptUpdate(BaseModel):
     content: str
 
-@router.get("/inspect/{doc_id}")
+@router.get("/inspect/{doc_id}", dependencies=[Depends(require_permission("view_analytics"))])
 async def inspect_document(doc_id: str):
     """
     Debug: View extracted chunks for a document.
     """
     return await db_manager.inspect_document(doc_id)
 
-@router.get("/prompt")
+@router.get("/prompt", dependencies=[Depends(require_permission("view_analytics"))])
 async def get_system_prompt():
     """
     Reads the active system prompt file.
@@ -131,7 +132,7 @@ async def get_system_prompt():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/prompt")
+@router.post("/prompt", dependencies=[Depends(require_permission("edit_prompts"))])
 async def update_system_prompt(update: PromptUpdate):
     """
     Updates the system prompt file.
@@ -142,7 +143,7 @@ async def update_system_prompt(update: PromptUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/logs")
+@router.get("/logs", dependencies=[Depends(require_permission("view_analytics"))])
 async def get_system_logs(lines: int = 100):
     """
     Retrieves the last N lines of the application log file.
@@ -164,7 +165,7 @@ class IngestionRequest(BaseModel):
     days: int = 7
     keywords: list[str] = []
 
-@router.post("/ingest/nova-iguacu")
+@router.post("/ingest/nova-iguacu", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def trigger_nova_iguacu_ingestion(request: IngestionRequest = Body(...)):
     """
     Triggers the ingestion of Nova Iguaçu gazettes for the last N days.
@@ -192,7 +193,7 @@ async def trigger_nova_iguacu_ingestion(request: IngestionRequest = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/ingest/list")
+@router.get("/ingest/list", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def list_local_files():
     """
     Lista arquivos pendentes na pasta data/ingest.
@@ -207,7 +208,7 @@ async def list_local_files():
 class LocalProcessRequest(BaseModel):
     items: List[Dict[str, str]] # [{"filename": "...", "doc_type": "..."}]
 
-@router.post("/ingest/process")
+@router.post("/ingest/process", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def process_local_files(request: LocalProcessRequest):
     """
     Processa arquivos selecionados com tipos específicos.
@@ -227,12 +228,12 @@ async def process_local_files(request: LocalProcessRequest):
 
 from src.core.settings_manager import settings_manager
 
-@router.get("/settings")
+@router.get("/settings", dependencies=[Depends(require_permission("view_analytics"))])
 async def get_settings():
     """Returns current dynamic settings."""
     return settings_manager.get_all()
 
-@router.post("/settings")
+@router.post("/settings", dependencies=[Depends(require_permission("manage_users"))])
 async def update_settings(updates: Dict[str, Any] = Body(...)):
     """Updates dynamic settings."""
     try:
@@ -241,7 +242,7 @@ async def update_settings(updates: Dict[str, Any] = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/settings/reset_prompt")
+@router.post("/settings/reset_prompt", dependencies=[Depends(require_permission("edit_prompts"))])
 async def reset_prompt():
     """Resets system prompt to default (hardcoded empty string, will force file reload)."""
     try:
@@ -250,7 +251,7 @@ async def reset_prompt():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/settings/purge_cache")
+@router.post("/settings/purge_cache", dependencies=[Depends(require_permission("manage_users"))])
 async def purge_vector_cache():
     """
     DANGER: Clears ChromaDB vectors AND SQLite Data.
@@ -266,7 +267,7 @@ async def purge_vector_cache():
 
 # --- Staging Area (Quarentena) ---
 
-@router.get("/staging")
+@router.get("/staging", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def get_staging_documents():
     """
     Lista documentos na Quarentena (status='pending').
@@ -277,13 +278,15 @@ async def get_staging_documents():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/staging/{doc_id}/text")
+@router.get("/staging/{doc_id}/text", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def get_staging_text(doc_id: str):
     """
     Retorna o texto integral de um documento para inspeção.
     """
     try:
         # Reusamos a lógica de inspeção mas focada no texto bruto
+        if not db_manager._sqlite_connection:
+            await db_manager.get_sqlite()
         async with db_manager._sqlite_connection.execute("SELECT text_content FROM documents WHERE id = ?", (doc_id,)) as cursor:
             row = await cursor.fetchone()
             if not row:
@@ -300,7 +303,7 @@ class ApprovalRequest(BaseModel):
     description: Optional[str] = None
     custom_tags: Optional[str] = None
 
-@router.post("/staging/{doc_id}/approve")
+@router.post("/staging/{doc_id}/approve", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def approve_document(doc_id: str, request: ApprovalRequest):
     """
     Corrige metadados e move documento para 'queued' (fila de processamento).
@@ -323,7 +326,7 @@ async def approve_document(doc_id: str, request: ApprovalRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/staging/process_batch")
+@router.post("/staging/process_batch", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def process_staging_batch():
     """
     Processa todos os documentos na fila ('queued') em lote.
@@ -360,7 +363,7 @@ async def process_staging_batch():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/staging/{doc_id}/activate")
+@router.post("/staging/{doc_id}/activate", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def activate_staging_document(doc_id: str):
     """
     Processa (ativa) um único documento da fila.
@@ -389,7 +392,7 @@ async def activate_staging_document(doc_id: str):
         logger.error(f"❌ Falha ao ativar documento {doc_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/staging/queued")
+@router.get("/staging/queued", dependencies=[Depends(require_permission("moderate_alerts"))])
 async def get_queued_documents():
     """
     Lista documentos aguardando processamento.

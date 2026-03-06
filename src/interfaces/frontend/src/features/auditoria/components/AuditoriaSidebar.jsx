@@ -1,4 +1,5 @@
 import React from 'react';
+import { adminFetch } from '../../../utils/adminFetch';
 
 const InteractionCard = ({ id, time, name, role, avatar, message, status, latency, isActive }) => {
     return (
@@ -69,7 +70,7 @@ export const AuditoriaSidebar = ({ onSelect, selectedId }) => {
 
     const fetchLogs = async () => {
         try {
-            const res = await fetch('/api/admin/stats');
+            const res = await adminFetch('/api/admin/stats');
             const data = await res.json();
             if (data.audit_logs) {
                 setLogs(data.audit_logs);

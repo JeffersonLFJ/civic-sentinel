@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { adminFetch } from '../../../utils/adminFetch';
 
 export const ScanModal = ({ isOpen, onClose, onSuccess }) => {
     const [files, setFiles] = useState([]);
@@ -26,7 +27,7 @@ export const ScanModal = ({ isOpen, onClose, onSuccess }) => {
     const fetchFiles = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/admin/ingest/list');
+            const res = await adminFetch('/api/admin/ingest/list');
             const data = await res.json();
             if (data.status === 'success') {
                 const fetchedFiles = data.files || [];
@@ -82,7 +83,7 @@ export const ScanModal = ({ isOpen, onClose, onSuccess }) => {
         setProcessing(true);
 
         try {
-            const res = await fetch('/api/admin/ingest/process', {
+            const res = await adminFetch('/api/admin/ingest/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ items: itemsToProcess })

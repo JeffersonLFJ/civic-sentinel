@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { adminFetch } from '../../../utils/adminFetch';
 
 export const ReviewModal = ({ isOpen, onClose, docId, filename, initialDocType, onSuccess }) => {
     const [loading, setLoading] = useState(false);
@@ -56,7 +57,7 @@ export const ReviewModal = ({ isOpen, onClose, docId, filename, initialDocType, 
     const fetchText = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/admin/staging/${docId}/text`);
+            const res = await adminFetch(`/api/admin/staging/${docId}/text`);
             const data = await res.json();
             setText(data.text || '');
         } catch (error) {
@@ -104,7 +105,7 @@ export const ReviewModal = ({ isOpen, onClose, docId, filename, initialDocType, 
                 custom_tags: customTags
             };
 
-            const res = await fetch(`/api/admin/staging/${docId}/approve`, {
+            const res = await adminFetch(`/api/admin/staging/${docId}/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

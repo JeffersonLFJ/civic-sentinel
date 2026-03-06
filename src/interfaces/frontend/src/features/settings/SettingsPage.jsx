@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { adminFetch } from '../../utils/adminFetch';
 
 export const SettingsPage = () => {
     const [config, setConfig] = useState({
@@ -22,7 +23,7 @@ export const SettingsPage = () => {
     const fetchSettings = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/admin/settings');
+            const res = await adminFetch('/api/admin/settings');
             const data = await res.json();
             setConfig(prev => ({ ...prev, ...data }));
         } catch (error) {
@@ -43,7 +44,7 @@ export const SettingsPage = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch('/api/admin/settings', {
+            const res = await adminFetch('/api/admin/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
@@ -66,7 +67,7 @@ export const SettingsPage = () => {
         if (code !== 'DELETAR') return;
 
         try {
-            const res = await fetch('/api/admin/settings/purge_cache', { method: 'POST' });
+            const res = await adminFetch('/api/admin/settings/purge_cache', { method: 'POST' });
             const data = await res.json();
             alert(data.message || (res.ok ? "Cache purgado." : "Erro ao purgar."));
         } catch (e) {
