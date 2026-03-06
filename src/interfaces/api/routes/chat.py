@@ -18,13 +18,14 @@ class ChatRequest(BaseModel):
     user_id: str
     fingerprint: Optional[str] = None # Device fingerprint
     history: Optional[List[Message]] = None
+    scratchpad: Optional[str] = None # Session Memory Notepad
     images: Optional[List[str]] = None
     # Active Listening Fields
     confirmation_mode: bool = False
     pending_intent: Optional[str] = None
     stream: bool = True # Default to Premium Streaming
 
-async def interpret_intent(message: str, history: Optional[List[Message]] = None) -> dict:
+async def interpret_intent(message: str, history: Optional[List[Message]] = None, scratchpad: Optional[str] = None) -> dict:
     """
     Motor Silencioso de Raciocínio (Backend).
     Função: Extrair termos de busca para o RAG e detectar se precisa de busca.
@@ -43,7 +44,11 @@ async def interpret_intent(message: str, history: Optional[List[Message]] = None
             history_str += f"{role_name}: {msg.content}\n"
         history_str += "\n"
         
-    prompt = f"{history_str}Input usuário: '{message}'"
+    scratchpad_str = ""
+    if scratchpad:
+        scratchpad_str = f"BLOCO DE NOTAS DA SESSÃO (Fatos conhecidos): {scratchpad}\n\n"
+        
+    prompt = f"{scratchpad_str}{history_str}Input usuário: '{message}'"
     
     try:
         # Force JSON mode
@@ -89,7 +94,7 @@ async def chat_endpoint(request: ChatRequest):
     
     try:
         # --- SILENT ENGINE ANALYTICS ---
-        intent_data = await interpret_intent(request.message, request.history)
+        intent_data = await interpret_intent(request.message, request.history, request.scratchpad)
         
         # Decide Query Final e Esfera
         final_query = intent_data.get("formal_query", request.message)
@@ -301,6 +306,8 @@ async def chat_endpoint(request: ChatRequest):
         if request.stream:
             async def event_generator():
                 full_response_text = ""
+                scratchpad_buffer = ""
+                in_scratchpad_block = False
                 
                 # 1. Yield Citations First
                 if citation_metadata:
@@ -316,8 +323,55 @@ async def chat_endpoint(request: ChatRequest):
                     num_ctx=settings_manager.num_ctx
                 ):
                     content = chunk["content"]
-                    full_response_text += content
-                    yield json.dumps({"type": "token", "content": content}) + "\n"
+                    
+                    # Intercept Scratchpad Logic - Aggressive Buffering
+                    if not in_scratchpad_block and "<SCRATCHPAD" in (scratchpad_buffer + content):
+                        in_scratchpad_block = True
+                        scratchpad_buffer += content
+                        continue
+                        
+                    if in_scratchpad_block:
+                        scratchpad_buffer += content
+                        if "</SCRATCHPAD>" in scratchpad_buffer:
+                            # Block completed
+                            in_scratchpad_block = False
+                            
+                            start_idx = scratchpad_buffer.find("<SCRATCHPAD>")
+                            if start_idx == -1: 
+                                start_idx = scratchpad_buffer.find("<SCRATCHPAD") # fallback if malformed
+                                
+                            end_idx = scratchpad_buffer.find("</SCRATCHPAD>")
+                            
+                            if start_idx != -1 and end_idx != -1:
+                                # Start after the > character
+                                tag_end_idx = scratchpad_buffer.find(">", start_idx) + 1
+                                extracted_note = scratchpad_buffer[tag_end_idx:end_idx].strip()
+                                yield json.dumps({"type": "scratchpad_update", "content": extracted_note}) + "\n"
+                                
+                                # Any text after the closing tag should be yielded as normal tokens
+                                remaining_text = scratchpad_buffer[end_idx + len("</SCRATCHPAD>"):]
+                                if remaining_text:
+                                    full_response_text += remaining_text
+                                    yield json.dumps({"type": "token", "content": remaining_text}) + "\n"
+                                    
+                            scratchpad_buffer = ""
+                        continue # Skip yielding to standard frontend text while building block
+                    
+                    # Normal Token Yield
+                    # Keep a tiny rolling buffer to foresee `<SCRATCHPAD` starting to emit
+                    scratchpad_buffer += content
+                    if len(scratchpad_buffer) > 15:
+                        # Safe to yield the oldest part of the buffer
+                        safe_content = scratchpad_buffer[:-12]
+                        scratchpad_buffer = scratchpad_buffer[-12:]
+                        if safe_content:
+                            full_response_text += safe_content
+                            yield json.dumps({"type": "token", "content": safe_content}) + "\n"
+                    
+                # Flush remaining buffer if any
+                if scratchpad_buffer and not in_scratchpad_block:
+                    full_response_text += scratchpad_buffer
+                    yield json.dumps({"type": "token", "content": scratchpad_buffer}) + "\n"
                     
                 # 3. Log Audit AFTER Stream
                 citation_names = ", ".join([m.get("filename", "unknown") for m in citation_metadata])

@@ -5,6 +5,7 @@ export const ChatPage = () => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [scratchpad, setScratchpad] = useState(''); // Session Memory Notepad
     const [userId] = useState(() => `user-${Math.random().toString(36).substr(2, 9)}`); // Simple Session ID
 
     const sendMessage = async () => {
@@ -52,6 +53,7 @@ export const ChatPage = () => {
                     message: userMsg.text,
                     user_id: userId,
                     history: recentHistory,
+                    scratchpad: scratchpad,
                     stream: true // Enabled SSE Streaming
                 })
             });
@@ -102,6 +104,12 @@ export const ChatPage = () => {
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, text: msg.text + data.content } : msg
                             ));
+                        }
+
+                        // Listen for scratchpad updates and save to state
+                        if (data.type === 'scratchpad_update' && data.content) {
+                            setScratchpad(data.content);
+                            console.log("📝 Scratchpad Updated:", data.content);
                         }
 
                         if (data.type === 'done') {
