@@ -18,7 +18,7 @@ DEFAULT_SETTINGS = {
     "system_prompt": "", # Empty means use default from file
     
     # Decisão / Escuta Ativa
-    "active_listening_threshold": 0.8, # Ambiguity score to trigger confirmation
+    "active_listening_threshold": 0.85, # Ambiguity score to trigger confirmation (increased to be less sensitive)
     "min_relevance_score": 0.4, # Minimum partial score to context inclusion
     "rag_top_k": 50, # Number of documents to retrieve
     
@@ -32,30 +32,25 @@ DEFAULT_SETTINGS = {
     
     # Prompts
     "intent_prompt": (
-        "Você é um motor de NLP para um sistema cívico. Estruture dados para busca vetorial. "
-        "Não seja educado, seja cirúrgico.\n\n"
-        "REGRAS DE EXTRAÇÃO:\n"
-        "1. Identifique a INTENÇÃO REAL (ex: 'posto fechado' -> 'denuncia_funcionamento_ubs').\n"
-        "2. Se for conversa fiada ('oi', 'quem é você') ou perguntas sobre o sistema, marque search_needed = false.\n"
-        "3. Se for confirmação ('sim', 'isso'), marque is_confirmation = true.\n"
-        "4. Identifique a ESFERA (sphere): 'federal', 'estadual', 'municipal' ou 'unknown'.\n"
-        "   - COMPETÊNCIA CONCORRENTE: Para temas amplos (Meio Ambiente, Saúde, Educação, Trânsito) ou perguntas teóricas ('O que é X?'), "
-        "RETORNE 'unknown' para buscar em TODAS as esferas.\n"
-        "   - Restrinja a 'municipal' APENAS se houver citação explícita de local/cidade ('em Nova Iguaçu', 'nesta cidade').\n"
-        "5. Extraia PALAVRAS-CHAVE (keywords): Liste 3 a 5 termos essenciais para busca textual (OR logic). Ignore conectivos.\n"
-        "\n"
-        "Retorne APENAS JSON:\n"
+        "Você é um motor de extração de intenções JSON puro. Sua função é analisar o contexto da conversa e a última frase do usuário para classificar a intenção.\n\n"
+        "REGRAS ESTRITAS:\n"
+        "1. INTEGRAÇÃO DE CONTEXTO: Se houver 'CONTEXTO DA CONVERSA RECENTE', você DEVE mesclar o assunto da conversa com a mensagem atual para encontrar a intenção. Mensagens curtas como 'sobre a obra' tornam-se 'sobre a obra da CEDAE em Tinguá' graças ao contexto.\n"
+        "2. AMBIGUIDADE (Regra de Ouro): Se a mensagem atual pode ser entendida lendo o histórico da conversa, `ambiguity_score` DEVE SER 0.1. SÓ DÊ um score > 0.85 se a mensagem for totalmente ininteligível mesmo com o histórico.\n"
+        "3. ESFERA: Use 'municipal' se o contexto mencionar uma cidade. Senão, 'unknown'.\n"
+        "4. PALAVRAS-CHAVE: Extraia 2 a 5 termos absolutos para pesquisa (ex: ['CEDAE', 'obra', 'Tinguá']).\n\n"
+        "FORMATO DE SAÍDA OBRIGATÓRIO (APENAS JSON):\n"
         "{\n"
-        '  "search_needed": <bool>,\n'
-        '  "is_confirmation": <bool>,\n'
-        '  "keywords": ["termo1", "termo2", "termo3"],\n'
-        '  "formal_query": "<frase completa otimizada>",\n'
-        '  "understood_intent": "<resumo curto>",\n'
-        '  "sphere": "<federal|estadual|municipal|unknown>",\n'
-        '  "ambiguity_score": <float 0.0-1.0>\n'
+        '  "search_needed": true,\n'
+        '  "is_confirmation": false,\n'
+        '  "keywords": ["termo1", "termo2"],\n'
+        '  "formal_query": "frase completa e clara com base no histórico",\n'
+        '  "understood_intent": "resumo",\n'
+        '  "sphere": "unknown",\n'
+        '  "ambiguity_score": 0.1\n'
         "}"
     )
 }
+
 
 class SettingsManager:
     """

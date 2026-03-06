@@ -24,18 +24,26 @@ class ChatRequest(BaseModel):
     pending_intent: Optional[str] = None
     stream: bool = True # Default to Premium Streaming
 
-async def interpret_intent(message: str) -> dict:
+async def interpret_intent(message: str, history: Optional[List[Message]] = None) -> dict:
     """
     Motor Silencioso de Raciocínio (Backend).
     Função: Extrair termos de busca para o RAG e detectar se precisa de busca.
-    NÃO gera texto de conversa.
+    NÃO gera texto de conversa. Usa o histórico para disambiguação de contexto.
     """
     
     # Prompt focado puramente em lógica e extração de dados
     from src.core.settings_manager import settings_manager
     system_prompt = settings_manager.intent_prompt
     
-    prompt = f"Input usuário: '{message}'"
+    history_str = ""
+    if history:
+        history_str = "CONTEXTO DA CONVERSA RECENTE:\n"
+        for msg in history:
+            role_name = "USUÁRIO" if msg.role == "user" else "ASSISTENTE"
+            history_str += f"{role_name}: {msg.content}\n"
+        history_str += "\n"
+        
+    prompt = f"{history_str}Input usuário: '{message}'"
     
     try:
         # Force JSON mode
@@ -81,7 +89,7 @@ async def chat_endpoint(request: ChatRequest):
     
     try:
         # --- SILENT ENGINE ANALYTICS ---
-        intent_data = await interpret_intent(request.message)
+        intent_data = await interpret_intent(request.message, request.history)
         
         # Decide Query Final e Esfera
         final_query = intent_data.get("formal_query", request.message)

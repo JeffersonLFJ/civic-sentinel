@@ -23,6 +23,15 @@ export const ChatPage = () => {
         setInput('');
         setLoading(true);
 
+        // Get up to 6 recent messages for context (excluding the one we just added locally or AI placeholders)
+        const recentHistory = messages
+            .filter(m => !m.isAi || m.text.trim() !== '') // Filter empty AI placeholders
+            .slice(-6) // Last 6 messages
+            .map(m => ({
+                role: m.isAi ? "assistant" : "user",
+                content: m.text
+            }));
+
         // Prepare the initial AI message placeholder
         const aiMsgId = Date.now() + 1;
         const initialAiMsg = {
@@ -42,6 +51,7 @@ export const ChatPage = () => {
                 body: JSON.stringify({
                     message: userMsg.text,
                     user_id: userId,
+                    history: recentHistory,
                     stream: true // Enabled SSE Streaming
                 })
             });
