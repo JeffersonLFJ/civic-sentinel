@@ -416,46 +416,45 @@ class SmartTextSplitter:
             from sentence_transformers import SentenceTransformer, util
             import numpy as np
         except ImportError:
-            # Fallback if dependencies missing
             return self.split_by_paragraphs(text)
 
-        # 1. Cheap Sentence Tokenization (Regex is 99% good enough here)
+        # 1. Cheap Sentence Tokenization
         sentences = re.split(r'(?<=[.?!])\s+', text)
         sentences = [s.strip() for s in sentences if s.strip()]
         
         if len(sentences) < window_size * 2:
              return [text]
 
-        # Lazy load model (singleton pattern ideally, but local var for safety now)
-        # Using all-MiniLM-L6-v2 (fast, ~80MB)
         import gc
         import torch
         
-        # Lazy load model
+        distances = []
+        valid_split_indices = []
+        
         try:
             model = SentenceTransformer('all-MiniLM-L6-v2') 
-            
-            # 2. Group Sentences & Embed
             embeddings = model.encode(sentences, convert_to_tensor=True)
             
-            distances = []
-            # Calculate cosine similarity...
-            # Note: We compute all distances here to avoid keeping 'model' and 'embeddings' alive too long
+            # 2. Calculate cosine similarity between consecutive windows
+            for i in range(len(sentences) - window_size):
+                # Window A: sentences[i:i+window_size]
+                # Window B: sentences[i+1:i+1+window_size]
+                window_a = torch.mean(embeddings[i:i+window_size], dim=0)
+                window_b = torch.mean(embeddings[i+1:i+1+window_size], dim=0)
+                
+                sim = float(util.cos_sim(window_a, window_b)[0][0])
+                distances.append(sim)
+                valid_split_indices.append(i + window_size)
             
-            # ... (Logic to calculate distances remains, but we need to verify if 'distances' calculation strictly needs 'util')
-            # The original code likely looped. Let's make sure we do the heavy lifting here 
-            # OR we just Clean up at the return.
-            
-            # Since the original code had logic after this, maybe it's better to just put cleanup at the VERY END of the function
-            # But the user asked to explicit delete "model"
-            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Semantic split failed: {e}")
+            return self.split_by_paragraphs(text)
         finally:
-            # Resource Cleanup (Critical for Mac/MPS)
             if 'model' in locals():
                 del model
             if 'embeddings' in locals():
                 del embeddings
-            
             gc.collect()
             try:
                 if torch.backends.mps.is_available():
@@ -464,7 +463,6 @@ class SmartTextSplitter:
                     torch.cuda.empty_cache()
             except:
                 pass
-            # ---------------------------------
             
         # 3. Dynamic Threshold
         if not distances:
@@ -474,9 +472,7 @@ class SmartTextSplitter:
         mean_sim = np.mean(dist_np)
         std_sim = np.std(dist_np)
         
-        # We cut where similarity is LOW (Valley).
-        # Threshold: statistically significant drop
-        threshold = mean_sim - (0.5 * std_sim) # 0.5 sigma drop
+        threshold = mean_sim - (0.5 * std_sim)
         
         split_points = []
         for idx, score in zip(valid_split_indices, distances):
@@ -486,21 +482,16 @@ class SmartTextSplitter:
         # 4. Construct Chunks
         final_chunks = []
         current_start = 0
-        
-        # Add end of text
         split_points.append(len(sentences))
         
         for split_idx in split_points:
-            # Check if this split is too close to previous? (Micro-chunk logic step 1)
-            # Actually user asked for "Force Union" AFTER creation.
-            
             chunk_sents = sentences[current_start:split_idx]
             chunk_text = " ".join(chunk_sents)
-            final_chunks.append(chunk_text)
+            if chunk_text.strip():
+                final_chunks.append(chunk_text)
             current_start = split_idx
             
-        # 5. Merge Micro-Chunks (The "Joiner")
-        # Iterative pass: forward merge
+        # 5. Merge Micro-Chunks
         merged_chunks = []
         buffer_chunk = ""
         
@@ -508,26 +499,22 @@ class SmartTextSplitter:
         while i < len(final_chunks):
             current = final_chunks[i]
             
-            # If buffer exists, prepend it
             if buffer_chunk:
                 current = buffer_chunk + " " + current
                 buffer_chunk = ""
                 
-            # Check size
             if len(current) < min_chunk_chars:
-                # Merge with NEXT if possible
                 if i + 1 < len(final_chunks):
-                    buffer_chunk = current # Carry forward to next iteration
+                    buffer_chunk = current
                 else:
-                    # Last chunk is tiny. Append to PREVIOUS if exists.
                     if merged_chunks:
                         merged_chunks[-1] += " " + current
                     else:
-                         merged_chunks.append(current) # Only one tiny chunk
+                         merged_chunks.append(current)
             else:
                 merged_chunks.append(current)
             i += 1
             
-        return merged_chunks
+        return merged_chunks if merged_chunks else [text]
 
 text_splitter = SmartTextSplitter()

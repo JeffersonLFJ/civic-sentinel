@@ -429,14 +429,25 @@ class DatabaseManager:
         filename = metadata.get("filename", "").lower()
         meta_doc_type = metadata.get("doc_type", "")
         
+        # Expanded matching: admin panel sets granular types like lei_ordinaria, constituicao
+        legal_types = ["lei", "legislacao", "lei_ordinaria", "lei_complementar", "constituicao", "decreto", "legislation"]
+        
         if source == "official_gazette" or meta_doc_type == "diario_oficial" or "diario" in filename:
             doc_type = "diario_oficial"
-        elif meta_doc_type == "lei" or "lei" in filename or "decreto" in filename:
+        elif meta_doc_type in legal_types or "lei" in filename or "decreto" in filename or "constituição" in filename:
              doc_type = "legislation"
         elif meta_doc_type:
              doc_type = meta_doc_type
              
         # 1. Macro Splitting (Defining Parents)
+        # Sanitize text from Docling/OCR artifacts BEFORE splitting
+        from src.utils.text_sanitizer import sanitize_extracted_text
+        text = sanitize_extracted_text(text)
+        
+        if not text:
+            logger.warning(f"⚠️ Document {doc_id} has no text after sanitization.")
+            return
+        
         logger.info(f"🔍 Fragmentando MACRO chunks para {doc_id} (Tipo: {doc_type})...")
         macro_chunks = []
         
