@@ -280,12 +280,14 @@ async def chat_endpoint(request: ChatRequest):
         else:
             context_str = "CONTEXTO RECUPERADO:\n[SISTEMA: NENHUM DOCUMENTO ENCONTRADO NO BANCO DE DADOS LOCAL]\n"
         
-        # 3. Load System Prompt logic
-        system_instructions = settings_manager.system_prompt
-        if not system_instructions:
-            from src.interfaces.api.routes.admin import PROMPT_FILE
-            if PROMPT_FILE.exists():
-                system_instructions = PROMPT_FILE.read_text(encoding="utf-8")
+        # 3. Load System Prompt logic (DYNAMIC MODULAR LOADING)
+        # Instead of pushing the monolithic text, we assemble only what is needed based on intent.
+        from src.core.prompt_builder import dynamic_prompt_builder
+        
+        system_instructions = dynamic_prompt_builder.build_prompt(
+            intent_data=intent_data, 
+            context_docs=context_docs
+        )
         
         full_system_prompt = f"{system_instructions}\n\n{context_str}"
         
