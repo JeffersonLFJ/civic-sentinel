@@ -106,6 +106,9 @@ class DatabaseManager:
             ementa TEXT,
             description TEXT,
             custom_tags TEXT,
+            file_hash TEXT, -- SHA-256 hash for deduplication
+            extraction_quality TEXT DEFAULT 'unknown', -- 'high', 'medium', 'low', 'ocr_fallback'
+            suggested_doc_type TEXT, -- Heuristic suggested type (may differ from user choice)
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -140,6 +143,22 @@ class DatabaseManager:
             """
             await cursor.execute(query_fts)
             
+            # Schema Migrations (add columns to existing DBs)
+            migrations = [
+                ("documents", "file_hash", "ALTER TABLE documents ADD COLUMN file_hash TEXT"),
+                ("documents", "extraction_quality", "ALTER TABLE documents ADD COLUMN extraction_quality TEXT DEFAULT 'unknown'"),
+                ("documents", "suggested_doc_type", "ALTER TABLE documents ADD COLUMN suggested_doc_type TEXT"),
+            ]
+            for table, col, sql in migrations:
+                try:
+                    await cursor.execute(f"SELECT {col} FROM {table} LIMIT 1")
+                except Exception:
+                    try:
+                        await cursor.execute(sql)
+                        logger.info(f"Migration: added column {col} to {table}")
+                    except Exception as e:
+                        logger.debug(f"Migration skip {col}: {e}")
+
             # FTS Backfill Migration
             try:
                 await cursor.execute("SELECT COUNT(*) FROM documents_fts")
@@ -249,9 +268,9 @@ class DatabaseManager:
 
         query = """
         INSERT INTO documents (
-            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type, sphere, status, ementa, description, custom_tags, initial_chunks_json
+            id, filename, source, storage_path, text_content, ocr_method, url, publication_date, doc_type, sphere, status, ementa, description, custom_tags, initial_chunks_json, file_hash, extraction_quality, suggested_doc_type
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         params = (
@@ -263,21 +282,22 @@ class DatabaseManager:
             doc_data.get("ocr_method", "manual"),
             doc_data.get("url"),
             doc_data.get("publication_date"),
-            doc_data.get("doc_type", "pending_classification"), # Default pending
+            doc_data.get("doc_type", "pending_classification"),
             doc_data.get("sphere", "unknown"),
             doc_data.get("status", "pending"),
             doc_data.get("ementa"),
             doc_data.get("description"),
             doc_data.get("custom_tags"),
-            initial_chunks_str
+            initial_chunks_str,
+            doc_data.get("file_hash"),
+            doc_data.get("extraction_quality", "unknown"),
+            doc_data.get("suggested_doc_type")
         )
         
         async with self._sqlite_connection.execute(query, params) as cursor:
             pass 
             
         if doc_data.get("text_content"):
-            # Update FTS to include new semantic fields
-            # Combining content + ementa + description for search
             full_search_text = doc_data["text_content"]
             if doc_data.get("ementa"):
                  full_search_text += f"\n[EMENTA: {doc_data['ementa']}]"
@@ -397,6 +417,7 @@ class DatabaseManager:
                 meta["parent_index"] = p_idx
                 meta["chunk_index"] = m_idx 
                 meta["parent_type"] = parent_type
+                meta["embedding_model"] = "chromadb_default"  # Feature 3: versioning
                 
                 ids.append(chunk_id)
                 documents.append(m_text)
@@ -512,6 +533,7 @@ class DatabaseManager:
                 meta["original_doc_id"] = doc_id
                 meta["parent_index"] = p_idx
                 meta["parent_type"] = parent_type
+                meta["embedding_model"] = "chromadb_default"  # Feature 3: versioning
                 
                 ids.append(chunk_id)
                 docs.append(m_text)

@@ -70,11 +70,17 @@ export const ChatPage = () => {
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop(); // Keep partial line in buffer
+                if (value) {
+                    buffer += decoder.decode(value, { stream: true });
+                }
+
+                let lines = buffer.split('\n');
+                if (!done) {
+                    buffer = lines.pop(); // Keep partial line in buffer
+                } else {
+                    buffer = ""; // Stream has ended, process all remaining lines
+                }
 
                 for (const line of lines) {
                     if (line.trim() === '') continue;
@@ -99,6 +105,10 @@ export const ChatPage = () => {
                         }
 
                         if (data.type === 'reasoning' && data.data) {
+                            if (!firstChunkReceived) {
+                                setLoading(false);
+                                firstChunkReceived = true;
+                            }
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, reasoning: data.data } : msg
                             ));
@@ -143,6 +153,8 @@ export const ChatPage = () => {
                         console.warn("Error parsing chunk", line, e);
                     }
                 }
+
+                if (done) break;
             }
 
         } catch (error) {
