@@ -32,10 +32,12 @@ class DynamicPromptManager:
         if not raw_text:
             return ""
 
-        # Slicing logic based on markdown headers
+        # Slicing logic based on markdown headers and HTML triggers
         sections = {}
+        section_triggers = {}
         current_section = "CORE"
         sections[current_section] = []
+        section_triggers[current_section] = "always"
 
         # Split by ### headers
         lines = raw_text.split('\n')
@@ -43,6 +45,10 @@ class DynamicPromptManager:
             if line.startswith('### '):
                 current_section = line[4:].strip()
                 sections[current_section] = [line]
+                section_triggers[current_section] = "always" # default
+            elif line.startswith('<!-- trigger:'):
+                trigger_rule = line.replace('<!-- trigger:', '').replace('-->', '').strip()
+                section_triggers[current_section] = trigger_rule
             else:
                 if current_section not in sections:
                     sections[current_section] = []
@@ -51,47 +57,37 @@ class DynamicPromptManager:
         # Reassemble based on logic
         final_prompt_parts = []
         
-        # 1. Always include Core Identity and basic conversational rules if they exist
-        identity_key = next((k for k in sections.keys() if "IDENTIDADE" in k.upper()), None)
-        if identity_key:
-            final_prompt_parts.extend(sections[identity_key])
-            
-        gestao_key = next((k for k in sections.keys() if "GESTÃO" in k.upper()), None)
-        if gestao_key:
-            final_prompt_parts.extend(sections[gestao_key])
-
-        seguranca_key = next((k for k in sections.keys() if "SEGURANÇA" in k.upper()), None)
-        if seguranca_key:
-            final_prompt_parts.extend(sections[seguranca_key])
-
-        # 2. Add RAG rules ONLY if search was needed
         search_needed = intent_data.get("search_needed", False)
-        if search_needed or context_docs:
-            rag_key = next((k for k in sections.keys() if "RAG" in k.upper()), None)
-            if rag_key:
-                final_prompt_parts.extend(sections[rag_key])
+        sphere = intent_data.get("sphere", "unknown")
+        keywords_str = " ".join(intent_data.get("keywords", [])).lower()
+        has_docs = len(context_docs) > 0
+        
+        # Regex fallback for legal
+        import re
+        legal_pattern = r"\b(lei|decreto|artigo|inciso|constituição|portaria|stf|jurisprudência)\b"
+        user_msg = intent_data.get("user_message", "").lower()
+        has_legal_regex = bool(re.search(legal_pattern, user_msg))
 
-        # 3. Add Legal Framework (Kelsen) ONLY if it's a legal query or if docs were found
-        kelsen_key = next((k for k in sections.keys() if "MATRIZ" in k.upper() or "KELSEN" in k.upper()), None)
-        if kelsen_key:
-            # We assume it's legal if it searched OR if the sphere was detected
-            sphere = intent_data.get("sphere", "unknown")
-            is_legal_intent = sphere != "unknown" or len(context_docs) > 0
-            if is_legal_intent:
-                final_prompt_parts.extend(sections[kelsen_key])
-
-        # 4. Add Civic Imagination ONLY if requested
-        imagination_key = next((k for k in sections.keys() if "IMAGINAÇÃO" in k.upper()), None)
-        if imagination_key:
-            # Check keywords for triggers
-            keywords_str = " ".join(intent_data.get("keywords", [])).lower()
-            if "imagina" in keywords_str or "simula" in keywords_str or "como seria" in keywords_str:
-                final_prompt_parts.extend(sections[imagination_key])
-
-        # 5. Always include Scratchpad for memory capability
-        scratchpad_key = next((k for k in sections.keys() if "SCRATCHPAD" in k.upper()), None)
-        if scratchpad_key:
-            final_prompt_parts.extend(sections[scratchpad_key])
+        for sec_name, sec_lines in sections.items():
+            rule = section_triggers.get(sec_name, "always")
+            
+            should_include = False
+            if rule == "always":
+                should_include = True
+            elif rule == "search=true":
+                if search_needed or has_docs:
+                    should_include = True
+            elif rule == "intent=legal":
+                if sphere != "unknown" or has_docs or has_legal_regex:
+                    should_include = True
+            elif rule == "intent=imagination":
+                if "imagina" in keywords_str or "simula" in keywords_str or "como seria" in keywords_str:
+                    should_include = True
+            else:
+                should_include = True # fallback
+                
+            if should_include:
+                final_prompt_parts.extend(sec_lines)
 
         # Fallback if somehow slicing failed (e.g., user removed all headers)
         if len(final_prompt_parts) == 0:

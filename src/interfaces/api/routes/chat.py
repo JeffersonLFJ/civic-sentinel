@@ -284,6 +284,8 @@ async def chat_endpoint(request: ChatRequest):
         # Instead of pushing the monolithic text, we assemble only what is needed based on intent.
         from src.core.prompt_builder import dynamic_prompt_builder
         
+        intent_data["user_message"] = request.message
+        
         system_instructions = dynamic_prompt_builder.build_prompt(
             intent_data=intent_data, 
             context_docs=context_docs
@@ -355,7 +357,17 @@ async def chat_endpoint(request: ChatRequest):
                                 # Start after the > character
                                 tag_end_idx = scratchpad_buffer.find(">", start_idx) + 1
                                 extracted_note = scratchpad_buffer[tag_end_idx:end_idx].strip()
-                                yield json.dumps({"type": "scratchpad_update", "content": extracted_note}) + "\n"
+                                
+                                # HARDENED SANITIZATION: Prevents Prompt Injection vulnerabilities
+                                # Scratchpad shouldn't contain executable braces {} or HTML brackets <>
+                                import re
+                                clean_note = pii_scrubber.scrub(extracted_note)
+                                clean_note = re.sub(r'[{<>]', '', clean_note)
+                                
+                                if len(clean_note) > 1000:
+                                    clean_note = clean_note[:1000] + "..."
+                                
+                                yield json.dumps({"type": "scratchpad_update", "content": clean_note}) + "\n"
                                 
                                 # Any text after the closing tag should be yielded as normal tokens
                                 remaining_text = scratchpad_buffer[end_idx + len("</SCRATCHPAD>"):]
