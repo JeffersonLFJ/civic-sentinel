@@ -50,11 +50,9 @@ export const ChatPage = () => {
                 throw new Error(`HTTP Error: ${response.status}`);
             }
 
-            // Remove main loading spinner as we're starting to receive data
-            setLoading(false);
-
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
+            let firstChunkReceived = false;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -75,6 +73,10 @@ export const ChatPage = () => {
                         }
 
                         if (data.type === 'citations' && data.data) {
+                            if (!firstChunkReceived) {
+                                setLoading(false);
+                                firstChunkReceived = true;
+                            }
                             // First frame usually has metadata
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, citations: data.data } : msg
@@ -82,6 +84,10 @@ export const ChatPage = () => {
                         }
 
                         if (data.type === 'token' && data.content) {
+                            if (!firstChunkReceived) {
+                                setLoading(false);
+                                firstChunkReceived = true;
+                            }
                             // Accumulate tokens
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, text: msg.text + data.content } : msg
@@ -95,10 +101,12 @@ export const ChatPage = () => {
 
                         // Also handle active listening responses (which come as standard JSON, not stream)
                         if (data.status === 'ambiguity_detected') {
+                            if (!firstChunkReceived) { setLoading(false); firstChunkReceived = true; }
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, text: data.response, isAmbiguous: true } : msg
                             ));
                         } else if (data.response && !data.type) {
+                            if (!firstChunkReceived) { setLoading(false); firstChunkReceived = true; }
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, text: data.response } : msg
                             ));
