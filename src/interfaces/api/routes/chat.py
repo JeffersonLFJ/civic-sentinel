@@ -312,6 +312,13 @@ async def chat_endpoint(request: ChatRequest):
                 # 1. Yield Citations First
                 if citation_metadata:
                      yield json.dumps({"type": "citations", "data": citation_metadata}) + "\n"
+                     
+                # 1.1 Yield Reasoning Info
+                reasoning_payload = {
+                     "intent": intent_data,
+                     "system_prompt": full_system_prompt
+                }
+                yield json.dumps({"type": "reasoning", "data": reasoning_payload}) + "\n"
                 
                 # 2. Yield Token Stream
                 async for chunk in llm_client.generate_stream(

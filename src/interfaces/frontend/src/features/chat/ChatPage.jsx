@@ -41,7 +41,8 @@ export const ChatPage = () => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             text: "",
             isAi: true,
-            citations: []
+            citations: [],
+            reasoning: null
         };
         setMessages(prev => [...prev, initialAiMsg]);
 
@@ -65,13 +66,15 @@ export const ChatPage = () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let firstChunkReceived = false;
+            let buffer = "";
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep partial line in buffer
 
                 for (const line of lines) {
                     if (line.trim() === '') continue;
@@ -92,6 +95,12 @@ export const ChatPage = () => {
                             // First frame usually has metadata
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMsgId ? { ...msg, citations: data.data } : msg
+                            ));
+                        }
+
+                        if (data.type === 'reasoning' && data.data) {
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMsgId ? { ...msg, reasoning: data.data } : msg
                             ));
                         }
 

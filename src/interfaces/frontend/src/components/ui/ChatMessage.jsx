@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const ChatMessage = ({ sender, time, text, isAi, avatar, actions }) => (
+export const ChatMessage = ({ sender, time, text, isAi, avatar, actions, reasoning }) => (
     <div className={`flex items-start gap-4 max-w-4xl mx-auto w-full group/message ${!isAi && 'justify-end'}`}> {/* User messages aligned right? Mockup shows User on Left too in Auditoria, but Chat has User on Right? */}
         {/* Wait, let's check mockups.
       Auditoria: User (Maria) Left. AI (Sentinela) Left. All stacked.
@@ -36,6 +36,23 @@ export const ChatMessage = ({ sender, time, text, isAi, avatar, actions }) => (
                     ? 'bg-white text-text-main rounded-tl-sm border border-border/50'
                     : 'bg-primary text-white rounded-tr-sm shadow-md shadow-primary/10'}`}>
                 {text}
+
+                {reasoning && isAi && (
+                    <div className="mt-4 pt-4 border-t border-border/50">
+                        <details className="group cursor-pointer">
+                            <summary className="text-[11px] font-bold text-text-muted hover:text-primary transition-colors flex items-center gap-1 outline-none list-none uppercase tracking-widest">
+                                <span className="material-symbols-outlined text-[14px]">psychology</span>
+                                Ver Raciocínio da IA
+                            </summary>
+                            <div className="mt-3 bg-background-light p-3 rounded-xl border border-border/50 font-mono text-[10px] text-text-secondary whitespace-pre-wrap max-h-60 overflow-y-auto">
+                                <div className="font-bold text-primary mb-1">🔍 INTENÇÃO ESTRUTURADA:</div>
+                                {JSON.stringify(reasoning.intent, null, 2)}
+                                <div className="font-bold text-primary mt-3 mb-1">🤖 SYSTEM PROMPT UTILIZADO:</div>
+                                {reasoning.system_prompt}
+                            </div>
+                        </details>
+                    </div>
+                )}
             </div>
 
             {actions && (
