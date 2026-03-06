@@ -432,7 +432,7 @@ class SmartTextSplitter:
         valid_split_indices = []
         
         try:
-            model = SentenceTransformer('all-MiniLM-L6-v2') 
+            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2') 
             embeddings = model.encode(sentences, convert_to_tensor=True)
             
             # 2. Calculate cosine similarity between consecutive windows

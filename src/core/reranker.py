@@ -13,7 +13,7 @@ class Reranker:
     Usage: Retrieve Top-K (high) -> Rerank -> Select Top-N (low) for LLM.
     """
     
-    _model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    _model_name = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     _model = None
 
     @classmethod
